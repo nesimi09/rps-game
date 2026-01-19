@@ -22,6 +22,9 @@ const rooms = new Map();
 // Game choices
 const CHOICES = ['rock', 'paper', 'scissors'];
 
+// Timer duration in seconds
+const TIMER_DURATION = 7;
+
 // Determine winner between two choices
 function getResult(choice1, choice2) {
   if (choice1 === choice2) return 'tie';
@@ -35,55 +38,85 @@ function getResult(choice1, choice2) {
   return 'lose';
 }
 
-// Calculate game results
+// Calculate game results with cumulative points
 function calculateResults(room) {
   const players = Array.from(room.players.values());
   const results = [];
   
-  // Count choices
+  // Count choices (only from players who made a choice)
   const choiceCounts = { rock: 0, paper: 0, scissors: 0 };
-  players.forEach(player => {
-    if (player.choice) {
-      choiceCounts[player.choice]++;
-    }
+  const playersWhoChose = players.filter(p => p.choice);
+  const playersWhoDidntChoose = players.filter(p => !p.choice);
+  
+  playersWhoChose.forEach(player => {
+    choiceCounts[player.choice]++;
   });
 
-  // Calculate each player's score
+  // Calculate each player's round score
   players.forEach(player => {
-    let wins = 0;
-    let losses = 0;
-    let ties = 0;
+    let roundWins = 0;
+    let roundLosses = 0;
+    let roundTies = 0;
 
-    players.forEach(opponent => {
-      if (player.id !== opponent.id && player.choice && opponent.choice) {
-        const result = getResult(player.choice, opponent.choice);
-        if (result === 'win') wins++;
-        else if (result === 'lose') losses++;
-        else ties++;
-      }
-    });
+    if (player.choice) {
+      // Player made a choice - compare against others who chose
+      playersWhoChose.forEach(opponent => {
+        if (player.id !== opponent.id) {
+          const result = getResult(player.choice, opponent.choice);
+          if (result === 'win') roundWins++;
+          else if (result === 'lose') roundLosses++;
+          else roundTies++;
+        }
+      });
+      // Player who chose beats everyone who didn't choose
+      roundWins += playersWhoDidntChoose.length;
+    } else {
+      // Player didn't choose - loses to everyone who did choose
+      roundLosses = playersWhoChose.length;
+    }
+
+    // Update cumulative points (1 point per win)
+    player.totalPoints = (player.totalPoints || 0) + roundWins;
 
     results.push({
       id: player.id,
       username: player.username,
       choice: player.choice || 'none',
-      wins,
-      losses,
-      ties,
-      score: wins - losses
+      roundWins,
+      roundLosses,
+      roundTies,
+      roundScore: roundWins - roundLosses,
+      totalPoints: player.totalPoints
     });
   });
 
-  // Sort by score (wins - losses)
-  results.sort((a, b) => b.score - a.score);
+  // Sort by total points (cumulative ranking)
+  results.sort((a, b) => b.totalPoints - a.totalPoints);
 
   return { results, choiceCounts };
+}
+
+// End the round (called by timer or when all players ready)
+function endRound(roomId) {
+  const room = rooms.get(roomId);
+  if (!room || room.gameState !== 'playing') return;
+
+  // Clear the timer
+  if (room.roundTimer) {
+    clearTimeout(room.roundTimer);
+    room.roundTimer = null;
+  }
+
+  room.gameState = 'results';
+  const { results, choiceCounts } = calculateResults(room);
+  io.to(room.id).emit('gameResults', { results, choiceCounts, roundNumber: room.roundNumber });
 }
 
 // Clean up empty rooms periodically
 setInterval(() => {
   rooms.forEach((room, roomId) => {
     if (room.players.size === 0) {
+      if (room.roundTimer) clearTimeout(room.roundTimer);
       rooms.delete(roomId);
     }
   });
@@ -91,6 +124,21 @@ setInterval(() => {
 
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
+
+  // Check if username is available in a room
+  socket.on('checkUsername', ({ roomId, username }) => {
+    const room = rooms.get(roomId);
+    
+    if (!room) {
+      socket.emit('usernameCheckResult', { available: false, error: 'Room not found' });
+      return;
+    }
+
+    const existingUsernames = Array.from(room.players.values()).map(p => p.username.toLowerCase());
+    const isAvailable = !existingUsernames.includes(username.toLowerCase());
+    
+    socket.emit('usernameCheckResult', { available: isAvailable, error: isAvailable ? null : 'Username already taken' });
+  });
 
   // Create a new room
   socket.on('createRoom', (username) => {
@@ -100,7 +148,8 @@ io.on('connection', (socket) => {
       hostId: socket.id,
       players: new Map(),
       gameState: 'lobby', // lobby, playing, results
-      roundNumber: 0
+      roundNumber: 0,
+      roundTimer: null
     };
 
     room.players.set(socket.id, {
@@ -108,7 +157,8 @@ io.on('connection', (socket) => {
       username: username,
       isHost: true,
       choice: null,
-      isReady: false
+      isReady: false,
+      totalPoints: 0
     });
 
     rooms.set(roomId, room);
@@ -138,21 +188,20 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Check for duplicate username
-    let finalUsername = username;
-    let counter = 1;
-    const existingUsernames = Array.from(room.players.values()).map(p => p.username);
-    while (existingUsernames.includes(finalUsername)) {
-      finalUsername = `${username}${counter}`;
-      counter++;
+    // Check for duplicate username (case-insensitive, reject if taken)
+    const existingUsernames = Array.from(room.players.values()).map(p => p.username.toLowerCase());
+    if (existingUsernames.includes(username.toLowerCase())) {
+      socket.emit('error', { message: 'Username already taken. Please choose a different name.' });
+      return;
     }
 
     room.players.set(socket.id, {
       id: socket.id,
-      username: finalUsername,
+      username: username,
       isHost: false,
       choice: null,
-      isReady: false
+      isReady: false,
+      totalPoints: 0
     });
 
     socket.join(roomId);
@@ -162,11 +211,11 @@ io.on('connection', (socket) => {
       roomId,
       playerId: socket.id,
       isHost: false,
-      username: finalUsername
+      username: username
     });
 
     io.to(roomId).emit('playerList', getPlayerList(room));
-    io.to(roomId).emit('playerJoined', { username: finalUsername });
+    io.to(roomId).emit('playerJoined', { username: username });
   });
 
   // Host starts the game
@@ -187,13 +236,22 @@ io.on('connection', (socket) => {
     room.gameState = 'playing';
     room.roundNumber++;
 
-    // Reset all player choices
+    // Reset all player choices for new round (keep totalPoints)
     room.players.forEach(player => {
       player.choice = null;
       player.isReady = false;
     });
 
-    io.to(room.id).emit('gameStarted', { roundNumber: room.roundNumber });
+    // Start the 7-second timer
+    io.to(room.id).emit('gameStarted', { 
+      roundNumber: room.roundNumber,
+      timerDuration: TIMER_DURATION
+    });
+
+    // Set timer to end round after 7 seconds
+    room.roundTimer = setTimeout(() => {
+      endRound(room.id);
+    }, TIMER_DURATION * 1000);
   });
 
   // Player makes a choice
@@ -212,7 +270,7 @@ io.on('connection', (socket) => {
     }
 
     const player = room.players.get(socket.id);
-    if (player) {
+    if (player && !player.choice) {
       player.choice = choice;
       player.isReady = true;
     }
@@ -225,12 +283,10 @@ io.on('connection', (socket) => {
       totalCount: room.players.size
     });
 
-    // Check if all players have made their choice
+    // Check if all players have made their choice - end early
     const allReady = Array.from(room.players.values()).every(p => p.isReady);
     if (allReady) {
-      room.gameState = 'results';
-      const { results, choiceCounts } = calculateResults(room);
-      io.to(room.id).emit('gameResults', { results, choiceCounts, roundNumber: room.roundNumber });
+      endRound(room.id);
     }
   });
 
@@ -269,11 +325,19 @@ io.on('connection', (socket) => {
       return;
     }
 
+    // Clear timer if exists
+    if (room.roundTimer) {
+      clearTimeout(room.roundTimer);
+      room.roundTimer = null;
+    }
+
     room.gameState = 'lobby';
     room.players.forEach(player => {
       player.choice = null;
       player.isReady = false;
+      player.totalPoints = 0; // Reset points when returning to lobby
     });
+    room.roundNumber = 0;
 
     io.to(room.id).emit('returnedToLobby');
     io.to(room.id).emit('playerList', getPlayerList(room));
@@ -292,6 +356,7 @@ io.on('connection', (socket) => {
     room.players.delete(socket.id);
 
     if (room.players.size === 0) {
+      if (room.roundTimer) clearTimeout(room.roundTimer);
       rooms.delete(socket.roomId);
       return;
     }
@@ -316,7 +381,8 @@ function getPlayerList(room) {
     id: player.id,
     username: player.username,
     isHost: player.isHost,
-    isReady: player.isReady
+    isReady: player.isReady,
+    totalPoints: player.totalPoints || 0
   }));
 }
 

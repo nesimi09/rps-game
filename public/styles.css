@@ -297,6 +297,41 @@ body {
   margin-bottom: 30px;
 }
 
+.timer-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 15px 0;
+}
+
+.timer-label {
+  color: var(--text-muted);
+  font-size: 1rem;
+}
+
+.timer-display {
+  font-size: 3rem;
+  font-weight: 700;
+  color: var(--primary);
+  background: var(--bg-light);
+  padding: 10px 25px;
+  border-radius: 12px;
+  min-width: 80px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.timer-display.urgent {
+  color: var(--danger);
+  animation: pulse 0.5s ease infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
 .timer-info {
   color: var(--text-muted);
   margin-top: 10px;
@@ -432,6 +467,20 @@ body {
 .results-table tr:first-child td {
   color: var(--warning);
   font-weight: 600;
+}
+
+.results-table .round-wins {
+  color: var(--success);
+}
+
+.results-table .round-losses {
+  color: var(--danger);
+}
+
+.results-table .total-points {
+  font-weight: 700;
+  color: var(--primary);
+  font-size: 1.1em;
 }
 
 .results-actions {

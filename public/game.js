@@ -7,7 +7,9 @@ let state = {
   playerId: null,
   isHost: false,
   username: '',
-  currentChoice: null
+  currentChoice: null,
+  timerInterval: null,
+  timeLeft: 7
 };
 
 // DOM Elements
@@ -24,6 +26,8 @@ const joinUsernameInput = document.getElementById('joinUsername');
 const roomCodeInput = document.getElementById('roomCodeInput');
 const createRoomBtn = document.getElementById('createRoomBtn');
 const joinRoomBtn = document.getElementById('joinRoomBtn');
+const joinSection = document.getElementById('joinSection');
+const createSection = document.getElementById('createSection');
 
 // Lobby Screen Elements
 const roomCodeDisplay = document.getElementById('roomCode');
@@ -37,6 +41,7 @@ const leaveRoomBtn = document.getElementById('leaveRoomBtn');
 // Game Screen Elements
 const roundNumber = document.getElementById('roundNumber');
 const readyStatus = document.getElementById('readyStatus');
+const timerDisplay = document.getElementById('timerDisplay');
 const choiceBtns = document.querySelectorAll('.choice-btn');
 const choiceStatus = document.getElementById('choiceStatus');
 
@@ -85,13 +90,59 @@ function getChoiceEmoji(choice) {
   return emojis[choice] || '❓';
 }
 
-// Check for room code in URL
+function startTimer(duration) {
+  state.timeLeft = duration;
+  updateTimerDisplay();
+  
+  if (state.timerInterval) {
+    clearInterval(state.timerInterval);
+  }
+  
+  state.timerInterval = setInterval(() => {
+    state.timeLeft--;
+    updateTimerDisplay();
+    
+    if (state.timeLeft <= 0) {
+      clearInterval(state.timerInterval);
+      state.timerInterval = null;
+      if (!state.currentChoice) {
+        choiceStatus.textContent = "Time's up! You didn't choose.";
+        choiceBtns.forEach(b => b.classList.add('disabled'));
+      }
+    }
+  }, 1000);
+}
+
+function updateTimerDisplay() {
+  if (timerDisplay) {
+    timerDisplay.textContent = state.timeLeft;
+    timerDisplay.className = 'timer-display';
+    if (state.timeLeft <= 3) {
+      timerDisplay.classList.add('urgent');
+    }
+  }
+}
+
+function stopTimer() {
+  if (state.timerInterval) {
+    clearInterval(state.timerInterval);
+    state.timerInterval = null;
+  }
+}
+
+// Check for room code in URL and setup auto-join
 function checkUrlForRoomCode() {
   const urlParams = new URLSearchParams(window.location.search);
   const roomCode = urlParams.get('room');
   if (roomCode) {
+    // Show only join section, hide create section
     roomCodeInput.value = roomCode;
+    if (createSection) createSection.style.display = 'none';
+    if (joinSection) joinSection.style.display = 'block';
     joinUsernameInput.focus();
+    
+    // Update page title
+    document.title = `Join Room ${roomCode} - Rock Paper Scissors`;
   }
 }
 
@@ -249,7 +300,7 @@ socket.on('becameHost', () => {
   showToast('You are now the host!', 'success');
 });
 
-socket.on('gameStarted', ({ roundNumber: round }) => {
+socket.on('gameStarted', ({ roundNumber: round, timerDuration }) => {
   state.currentChoice = null;
   roundNumber.textContent = round;
   readyStatus.textContent = '0/0 players ready';
@@ -260,7 +311,10 @@ socket.on('gameStarted', ({ roundNumber: round }) => {
   });
 
   showScreen('game');
-  showToast(`Round ${round} started!`, 'success');
+  showToast(`Round ${round} started! You have ${timerDuration} seconds!`, 'success');
+  
+  // Start the countdown timer
+  startTimer(timerDuration);
 });
 
 socket.on('playerReady', ({ readyCount, totalCount }) => {
@@ -268,6 +322,9 @@ socket.on('playerReady', ({ readyCount, totalCount }) => {
 });
 
 socket.on('gameResults', ({ results, choiceCounts, roundNumber: round }) => {
+  // Stop the timer
+  stopTimer();
+  
   resultsRound.textContent = round;
   rockCount.textContent = choiceCounts.rock;
   paperCount.textContent = choiceCounts.paper;
@@ -279,15 +336,21 @@ socket.on('gameResults', ({ results, choiceCounts, roundNumber: round }) => {
     if (player.id === state.playerId) {
       tr.classList.add('highlight');
     }
+    
+    // Add medal for top 3
+    let rankDisplay = index + 1;
+    if (index === 0) rankDisplay = '🥇';
+    else if (index === 1) rankDisplay = '🥈';
+    else if (index === 2) rankDisplay = '🥉';
 
     tr.innerHTML = `
-      <td>${index + 1}</td>
+      <td>${rankDisplay}</td>
       <td>${player.username}${player.id === state.playerId ? ' (You)' : ''}</td>
       <td>${getChoiceEmoji(player.choice)}</td>
-      <td>${player.wins}</td>
-      <td>${player.losses}</td>
-      <td>${player.ties}</td>
-      <td>${player.score > 0 ? '+' : ''}${player.score}</td>
+      <td class="round-wins">+${player.roundWins}</td>
+      <td class="round-losses">-${player.roundLosses}</td>
+      <td>${player.roundTies}</td>
+      <td class="total-points">${player.totalPoints}</td>
     `;
     resultsBody.appendChild(tr);
   });
@@ -298,8 +361,9 @@ socket.on('gameResults', ({ results, choiceCounts, roundNumber: round }) => {
 
 socket.on('returnedToLobby', () => {
   state.currentChoice = null;
+  stopTimer();
   showScreen('lobby');
-  showToast('Returned to lobby', 'success');
+  showToast('Returned to lobby - scores reset', 'success');
 });
 
 socket.on('error', ({ message }) => {
