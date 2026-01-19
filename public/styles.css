@@ -119,6 +119,26 @@ body {
   font-size: 0.85rem;
 }
 
+.btn-warning {
+  background: var(--warning);
+  color: white;
+}
+
+.btn-warning:hover {
+  background: #d97706;
+  transform: translateY(-2px);
+}
+
+.btn-warning.ready-to-change {
+  background: var(--danger);
+  animation: pulse-warning 0.5s ease infinite;
+}
+
+@keyframes pulse-warning {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -200,6 +220,11 @@ body {
   justify-content: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.change-room-section {
+  margin-top: 15px;
+  text-align: center;
 }
 
 .room-code {

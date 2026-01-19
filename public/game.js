@@ -4,6 +4,7 @@ const socket = io();
 // State
 let state = {
   roomId: null,
+  roomCode: null,
   playerId: null,
   isHost: false,
   username: '',
@@ -11,7 +12,8 @@ let state = {
   timerInterval: null,
   timeLeft: 5,
   resultsTimer: null,
-  opponent: null
+  opponent: null,
+  changeRoomClickState: 0 // 0 = not clicked, 1 = ready to change
 };
 
 // DOM Elements
@@ -33,10 +35,10 @@ const joinRoomBtn = document.getElementById('joinRoomBtn');
 
 // Lobby Screen Elements
 const roomCodeDisplay = document.getElementById('roomCode');
+const roomCodeSection = document.getElementById('roomCodeSection');
 const copyLinkBtn = document.getElementById('copyLinkBtn');
 const copyCodeBtn = document.getElementById('copyCodeBtn');
-const generateNewRoomBtn = document.getElementById('generateNewRoomBtn');
-const newRoomLink = document.getElementById('newRoomLink');
+const changeRoomCodeBtn = document.getElementById('changeRoomCodeBtn');
 const playerList = document.getElementById('playerList');
 const playerCount = document.getElementById('playerCount');
 const startGameBtn = document.getElementById('startGameBtn');
@@ -82,6 +84,11 @@ function updateHostUI() {
   });
   waitingMessage.style.display = state.isHost ? 'none' : 'block';
   waitingNextRound.style.display = state.isHost ? 'none' : 'block';
+  
+  // Show/hide room code section based on host status
+  if (roomCodeSection) {
+    roomCodeSection.style.display = state.isHost ? 'flex' : 'none';
+  }
 }
 
 function getChoiceEmoji(choice) {
@@ -132,7 +139,7 @@ function checkUrlForRoomCode() {
   const urlParams = new URLSearchParams(window.location.search);
   const roomCode = urlParams.get('room');
   if (roomCode) {
-    state.roomId = roomCode.toLowerCase();
+    state.roomCode = roomCode.toLowerCase();
     showScreen('join');
     document.title = `Join Room - Rock Paper Scissors Event`;
   }
@@ -155,23 +162,23 @@ joinRoomBtn.addEventListener('click', () => {
     showToast('Please enter your name', 'error');
     return;
   }
-  if (!state.roomId) {
+  if (!state.roomCode) {
     showToast('No room to join', 'error');
     return;
   }
   state.username = username;
-  socket.emit('joinRoom', { roomId: state.roomId, username });
+  socket.emit('joinRoom', { roomCode: state.roomCode, username });
 });
 
 copyLinkBtn.addEventListener('click', () => {
-  const link = `${window.location.origin}?room=${state.roomId}`;
+  const link = `${window.location.origin}?room=${state.roomCode}`;
   navigator.clipboard.writeText(link).then(() => {
     showToast('Link copied!', 'success');
   });
 });
 
 copyCodeBtn.addEventListener('click', () => {
-  navigator.clipboard.writeText(state.roomId).then(() => {
+  navigator.clipboard.writeText(state.roomCode).then(() => {
     showToast('Room code copied!', 'success');
   });
 });
@@ -184,9 +191,21 @@ leaveRoomBtn.addEventListener('click', () => {
   window.location.href = window.location.origin;
 });
 
-if (generateNewRoomBtn) {
-  generateNewRoomBtn.addEventListener('click', () => {
-    socket.emit('generateNewRoom');
+if (changeRoomCodeBtn) {
+  changeRoomCodeBtn.addEventListener('click', () => {
+    if (state.changeRoomClickState === 0) {
+      // First click - show confirmation state
+      state.changeRoomClickState = 1;
+      changeRoomCodeBtn.textContent = 'Click again to change';
+      changeRoomCodeBtn.classList.add('ready-to-change');
+      showToast('Click again to change room code. Old links will stop working!', 'warning');
+    } else {
+      // Second click - actually change the room code
+      state.changeRoomClickState = 0;
+      changeRoomCodeBtn.textContent = 'Change Room Code & Link';
+      changeRoomCodeBtn.classList.remove('ready-to-change');
+      socket.emit('changeRoomCode');
+    }
   });
 }
 
@@ -213,25 +232,27 @@ backToLobbyBtn.addEventListener('click', () => {
 });
 
 // Socket Event Handlers
-socket.on('roomCreated', ({ roomId, playerId, isHost }) => {
+socket.on('roomCreated', ({ roomId, roomCode, playerId, isHost }) => {
   state.roomId = roomId;
+  state.roomCode = roomCode;
   state.playerId = playerId;
   state.isHost = isHost;
 
-  roomCodeDisplay.textContent = roomId;
+  roomCodeDisplay.textContent = roomCode;
   updateHostUI();
   showScreen('lobby');
-  window.history.pushState({}, '', `?room=${roomId}`);
+  window.history.pushState({}, '', `?room=${roomCode}`);
   showToast('Room created!', 'success');
 });
 
-socket.on('roomJoined', ({ roomId, playerId, isHost, username }) => {
+socket.on('roomJoined', ({ roomId, roomCode, playerId, isHost, username }) => {
   state.roomId = roomId;
+  state.roomCode = roomCode;
   state.playerId = playerId;
   state.isHost = isHost;
   state.username = username;
 
-  roomCodeDisplay.textContent = roomId;
+  roomCodeDisplay.textContent = roomCode;
   updateHostUI();
   showScreen('lobby');
   showToast('Joined room!', 'success');
@@ -434,27 +455,34 @@ socket.on('gameOver', ({ winners, leaderboard }) => {
 socket.on('returnedToLobby', () => {
   state.currentChoice = null;
   state.opponent = null;
+  state.changeRoomClickState = 0;
+  if (changeRoomCodeBtn) {
+    changeRoomCodeBtn.textContent = 'Change Room Code & Link';
+    changeRoomCodeBtn.classList.remove('ready-to-change');
+  }
   stopTimer();
   if (state.resultsTimer) {
     clearInterval(state.resultsTimer);
     state.resultsTimer = null;
   }
-  // Clear new room link when returning to lobby
-  if (newRoomLink) newRoomLink.innerHTML = '';
   showScreen('lobby');
   showToast('Returned to lobby', 'success');
 });
 
-socket.on('newRoomGenerated', ({ newRoomId }) => {
-  if (newRoomLink) {
-    const link = `${window.location.origin}?room=${newRoomId}`;
-    newRoomLink.innerHTML = `
-      <div class="generated-link">
-        <input type="text" value="${link}" readonly id="newRoomLinkInput" />
-        <button class="btn btn-small" onclick="navigator.clipboard.writeText('${link}').then(() => alert('Copied!'))">Copy</button>
-      </div>
-    `;
+socket.on('roomCodeChanged', ({ newRoomCode }) => {
+  state.roomCode = newRoomCode;
+  state.changeRoomClickState = 0;
+  if (changeRoomCodeBtn) {
+    changeRoomCodeBtn.textContent = 'Change Room Code & Link';
+    changeRoomCodeBtn.classList.remove('ready-to-change');
   }
+  roomCodeDisplay.textContent = newRoomCode;
+  window.history.pushState({}, '', `?room=${newRoomCode}`);
+  showToast('Room code changed! Old links will no longer work.', 'success');
+});
+
+socket.on('newRoomGenerated', ({ newRoomId }) => {
+  // Legacy handler - no longer used
 });
 
 socket.on('hostLeft', () => {

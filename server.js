@@ -13,6 +13,7 @@ const io = new Server(server, {
 app.use(express.static(path.join(__dirname, 'public')));
 
 const rooms = new Map();
+const roomIdToRoom = new Map(); // Maps room codes to room objects for quick lookup
 const CHOICES = ['rock', 'paper', 'scissors'];
 const TIMER_DURATION = 5;
 const RESULTS_DURATION = 5;
@@ -205,6 +206,7 @@ setInterval(() => {
     if (room.players.size === 0) {
       if (room.roundTimer) clearTimeout(room.roundTimer);
       if (room.resultsTimer) clearTimeout(room.resultsTimer);
+      roomIdToRoom.delete(room.roomCode);
       rooms.delete(roomId);
     }
   });
@@ -214,9 +216,11 @@ io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
   socket.on('createRoom', (username) => {
-    const roomId = uuidv4().substring(0, 8);
+    const internalId = uuidv4(); // Internal room identifier (never changes)
+    const roomCode = uuidv4().substring(0, 8); // Public room code (can be changed)
     const room = {
-      id: roomId,
+      id: internalId,
+      roomCode: roomCode,
       hostId: socket.id,
       players: new Map(),
       gameState: 'lobby',
@@ -238,18 +242,19 @@ io.on('connection', (socket) => {
       opponentChoice: null
     });
 
-    rooms.set(roomId, room);
-    socket.join(roomId);
-    socket.roomId = roomId;
+    rooms.set(internalId, room);
+    roomIdToRoom.set(roomCode, room);
+    socket.join(internalId);
+    socket.roomId = internalId;
 
-    socket.emit('roomCreated', { roomId, playerId: socket.id, isHost: true });
-    io.to(roomId).emit('playerList', getPlayerList(room));
+    socket.emit('roomCreated', { roomId: internalId, roomCode, playerId: socket.id, isHost: true });
+    io.to(internalId).emit('playerList', getPlayerList(room));
   });
 
-  socket.on('joinRoom', ({ roomId, username }) => {
-    const room = rooms.get(roomId);
+  socket.on('joinRoom', ({ roomCode, username }) => {
+    const room = roomIdToRoom.get(roomCode);
     if (!room) {
-      socket.emit('error', { message: 'Room not found' });
+      socket.emit('error', { message: 'Room not found or link is no longer valid' });
       return;
     }
     if (room.gameState !== 'lobby') {
@@ -274,12 +279,12 @@ io.on('connection', (socket) => {
       opponentChoice: null
     });
 
-    socket.join(roomId);
-    socket.roomId = roomId;
+    socket.join(room.id);
+    socket.roomId = room.id;
 
-    socket.emit('roomJoined', { roomId, playerId: socket.id, isHost: false, username });
-    io.to(roomId).emit('playerList', getPlayerList(room));
-    io.to(roomId).emit('playerJoined', { username });
+    socket.emit('roomJoined', { roomId: room.id, roomCode, playerId: socket.id, isHost: false, username });
+    io.to(room.id).emit('playerList', getPlayerList(room));
+    io.to(room.id).emit('playerJoined', { username });
   });
 
   socket.on('startGame', () => {
@@ -370,9 +375,34 @@ io.on('connection', (socket) => {
     const room = rooms.get(socket.roomId);
     if (!room || room.hostId !== socket.id) return;
     
-    // Generate a new room ID for tiebreakers
-    const newRoomId = uuidv4().substring(0, 8);
-    socket.emit('newRoomGenerated', { newRoomId });
+    // Remove old room code mapping
+    roomIdToRoom.delete(room.roomCode);
+    
+    // Generate a new room code
+    const newRoomCode = uuidv4().substring(0, 8);
+    room.roomCode = newRoomCode;
+    
+    // Add new room code mapping
+    roomIdToRoom.set(newRoomCode, room);
+    
+    socket.emit('roomCodeChanged', { newRoomCode });
+  });
+
+  socket.on('changeRoomCode', () => {
+    const room = rooms.get(socket.roomId);
+    if (!room || room.hostId !== socket.id) return;
+    
+    // Remove old room code mapping
+    roomIdToRoom.delete(room.roomCode);
+    
+    // Generate a new room code
+    const newRoomCode = uuidv4().substring(0, 8);
+    room.roomCode = newRoomCode;
+    
+    // Add new room code mapping
+    roomIdToRoom.set(newRoomCode, room);
+    
+    socket.emit('roomCodeChanged', { newRoomCode });
   });
 
   socket.on('returnToLobby', () => {
@@ -419,6 +449,7 @@ io.on('connection', (socket) => {
       room.players.forEach((p, id) => {
         io.sockets.sockets.get(id)?.leave(room.id);
       });
+      roomIdToRoom.delete(room.roomCode);
       rooms.delete(socket.roomId);
       return;
     }
@@ -426,6 +457,7 @@ io.on('connection', (socket) => {
     if (room.players.size === 0) {
       if (room.roundTimer) clearTimeout(room.roundTimer);
       if (room.resultsTimer) clearTimeout(room.resultsTimer);
+      roomIdToRoom.delete(room.roomCode);
       rooms.delete(socket.roomId);
       return;
     }
