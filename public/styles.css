@@ -651,6 +651,33 @@ body {
   font-weight: 600;
 }
 
+/* New Room Section (host only) */
+.new-room-section {
+  margin-top: 15px;
+  padding: 15px;
+  background: var(--bg-light);
+  border-radius: 10px;
+  text-align: center;
+}
+.new-room-link {
+  margin-top: 10px;
+}
+.generated-link {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+}
+.generated-link input {
+  flex: 1;
+  max-width: 280px;
+  padding: 8px 12px;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background: var(--bg);
+}
+
 /* Winner Display */
 .winner-display {
   text-align: center;

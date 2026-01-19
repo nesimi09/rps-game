@@ -35,6 +35,8 @@ const joinRoomBtn = document.getElementById('joinRoomBtn');
 const roomCodeDisplay = document.getElementById('roomCode');
 const copyLinkBtn = document.getElementById('copyLinkBtn');
 const copyCodeBtn = document.getElementById('copyCodeBtn');
+const generateNewRoomBtn = document.getElementById('generateNewRoomBtn');
+const newRoomLink = document.getElementById('newRoomLink');
 const playerList = document.getElementById('playerList');
 const playerCount = document.getElementById('playerCount');
 const startGameBtn = document.getElementById('startGameBtn');
@@ -181,6 +183,12 @@ startGameBtn.addEventListener('click', () => {
 leaveRoomBtn.addEventListener('click', () => {
   window.location.href = window.location.origin;
 });
+
+if (generateNewRoomBtn) {
+  generateNewRoomBtn.addEventListener('click', () => {
+    socket.emit('generateNewRoom');
+  });
+}
 
 choiceBtns.forEach(btn => {
   btn.addEventListener('click', () => {
@@ -431,8 +439,29 @@ socket.on('returnedToLobby', () => {
     clearInterval(state.resultsTimer);
     state.resultsTimer = null;
   }
+  // Clear new room link when returning to lobby
+  if (newRoomLink) newRoomLink.innerHTML = '';
   showScreen('lobby');
   showToast('Returned to lobby', 'success');
+});
+
+socket.on('newRoomGenerated', ({ newRoomId }) => {
+  if (newRoomLink) {
+    const link = `${window.location.origin}?room=${newRoomId}`;
+    newRoomLink.innerHTML = `
+      <div class="generated-link">
+        <input type="text" value="${link}" readonly id="newRoomLinkInput" />
+        <button class="btn btn-small" onclick="navigator.clipboard.writeText('${link}').then(() => alert('Copied!'))">Copy</button>
+      </div>
+    `;
+  }
+});
+
+socket.on('hostLeft', () => {
+  showToast('Host left - room closed', 'error');
+  setTimeout(() => {
+    window.location.href = window.location.origin;
+  }, 2000);
 });
 
 socket.on('error', ({ message }) => {

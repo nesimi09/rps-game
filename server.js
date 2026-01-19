@@ -366,6 +366,15 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('generateNewRoom', () => {
+    const room = rooms.get(socket.roomId);
+    if (!room || room.hostId !== socket.id) return;
+    
+    // Generate a new room ID for tiebreakers
+    const newRoomId = uuidv4().substring(0, 8);
+    socket.emit('newRoomGenerated', { newRoomId });
+  });
+
   socket.on('returnToLobby', () => {
     const room = rooms.get(socket.roomId);
     if (!room || room.hostId !== socket.id) return;
@@ -401,20 +410,24 @@ io.on('connection', (socket) => {
 
     room.players.delete(socket.id);
 
+    // If host leaves, close entire room and kick everyone
+    if (wasHost) {
+      if (room.roundTimer) clearTimeout(room.roundTimer);
+      if (room.resultsTimer) clearTimeout(room.resultsTimer);
+      io.to(room.id).emit('hostLeft');
+      // Kick all remaining players
+      room.players.forEach((p, id) => {
+        io.sockets.sockets.get(id)?.leave(room.id);
+      });
+      rooms.delete(socket.roomId);
+      return;
+    }
+
     if (room.players.size === 0) {
       if (room.roundTimer) clearTimeout(room.roundTimer);
       if (room.resultsTimer) clearTimeout(room.resultsTimer);
       rooms.delete(socket.roomId);
       return;
-    }
-
-    if (wasHost) {
-      const newHost = room.players.values().next().value;
-      if (newHost) {
-        newHost.isHost = true;
-        room.hostId = newHost.id;
-        io.to(newHost.id).emit('becameHost');
-      }
     }
 
     io.to(room.id).emit('playerList', getPlayerList(room));
