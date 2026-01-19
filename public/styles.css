@@ -71,6 +71,17 @@ body {
   margin-top: 5px;
 }
 
+.logo .game-mode {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--primary);
+  margin-top: 10px;
+  padding: 8px 16px;
+  background: var(--bg-light);
+  border-radius: 20px;
+  display: inline-block;
+}
+
 /* Buttons */
 .btn {
   display: inline-block;
