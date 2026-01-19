@@ -632,6 +632,24 @@ body {
   background: rgba(245, 158, 11, 0.15);
   color: var(--warning);
 }
+.round-result.game-over {
+  font-size: 1.5rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  color: #92400e;
+  animation: celebrate 0.5s ease infinite alternate;
+}
+@keyframes celebrate {
+  from { transform: scale(1); }
+  to { transform: scale(1.03); }
+}
+.results-table tr.winner {
+  background: linear-gradient(135deg, #fef3c7, #fde68a) !important;
+}
+.results-table tr.winner td {
+  color: #92400e !important;
+  font-weight: 600;
+}
 
 /* Winner Display */
 .winner-display {

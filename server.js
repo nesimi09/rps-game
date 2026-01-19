@@ -16,6 +16,7 @@ const rooms = new Map();
 const CHOICES = ['rock', 'paper', 'scissors'];
 const TIMER_DURATION = 5;
 const RESULTS_DURATION = 5;
+const WINS_TO_WIN = 10;
 
 function getResult(choice1, choice2) {
   if (choice1 === choice2) return 'tie';
@@ -131,10 +132,22 @@ function endRound(roomId) {
     });
   });
 
-  // Auto-start next round
-  room.resultsTimer = setTimeout(() => {
-    startNextRound(roomId);
-  }, RESULTS_DURATION * 1000);
+  // Check for winners (10+ wins)
+  const winners = leaderboard.filter(p => p.wins >= WINS_TO_WIN);
+  
+  if (winners.length > 0) {
+    // Game over!
+    room.gameState = 'finished';
+    io.to(room.id).emit('gameOver', {
+      winners: winners.map(w => w.username),
+      leaderboard
+    });
+  } else {
+    // Auto-start next round
+    room.resultsTimer = setTimeout(() => {
+      startNextRound(roomId);
+    }, RESULTS_DURATION * 1000);
+  }
 }
 
 function startNextRound(roomId) {

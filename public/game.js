@@ -378,6 +378,51 @@ socket.on('gameResults', ({ leaderboard, roundNumber: round, yourResult, opponen
   showScreen('results');
 });
 
+socket.on('gameOver', ({ winners, leaderboard }) => {
+  stopTimer();
+  if (state.resultsTimer) {
+    clearInterval(state.resultsTimer);
+    state.resultsTimer = null;
+  }
+  
+  // Show winner banner
+  let winnerText = '';
+  if (winners.length === 1) {
+    winnerText = `🎉 ${winners[0]} WINS with 10 points! 🎉`;
+  } else {
+    winnerText = `🎉 TIE! ${winners.join(' & ')} reached 10 points! 🎉`;
+  }
+  
+  roundResult.innerHTML = winnerText;
+  roundResult.className = 'round-result win game-over';
+  
+  // Render final leaderboard
+  resultsBody.innerHTML = '';
+  leaderboard.forEach((player, index) => {
+    const tr = document.createElement('tr');
+    if (player.id === state.playerId) tr.classList.add('highlight');
+    if (winners.some(w => w === player.username)) tr.classList.add('winner');
+    
+    let rankDisplay = index + 1;
+    if (index === 0) rankDisplay = '🥇';
+    else if (index === 1) rankDisplay = '🥈';
+    else if (index === 2) rankDisplay = '🥉';
+
+    tr.innerHTML = `
+      <td>${rankDisplay}</td>
+      <td>${player.username}${player.id === state.playerId ? ' (You)' : ''}</td>
+      <td>${player.wins}</td>
+    `;
+    resultsBody.appendChild(tr);
+  });
+
+  nextRoundCountdown.textContent = 'Game Over!';
+  waitingNextRound.style.display = 'none';
+  if (state.isHost) backToLobbyBtn.style.display = 'inline-block';
+  
+  showScreen('results');
+});
+
 socket.on('returnedToLobby', () => {
   state.currentChoice = null;
   state.opponent = null;
