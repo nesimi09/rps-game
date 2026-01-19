@@ -11,12 +11,12 @@
   --success: #22c55e;
   --danger: #ef4444;
   --warning: #f59e0b;
-  --bg: #0f172a;
-  --bg-light: #1e293b;
-  --bg-lighter: #334155;
-  --text: #f8fafc;
-  --text-muted: #94a3b8;
-  --border: #475569;
+  --bg: #ffffff;
+  --bg-light: #f8fafc;
+  --bg-lighter: #e2e8f0;
+  --text: #1e293b;
+  --text-muted: #64748b;
+  --border: #cbd5e1;
 }
 
 body {
@@ -500,13 +500,15 @@ body {
 }
 
 .toast {
-  background: var(--bg-light);
+  background: var(--text);
+  color: var(--bg);
   padding: 15px 20px;
   border-radius: 8px;
   margin-top: 10px;
   animation: slideIn 0.3s ease;
   border-left: 4px solid var(--primary);
   max-width: 300px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
 .toast.success {
@@ -585,4 +587,85 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--secondary);
+}
+
+/* Watermark */
+.watermark {
+  position: fixed;
+  bottom: 10px;
+  right: 15px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  opacity: 0.6;
+  pointer-events: none;
+  font-weight: 500;
+}
+
+/* Winner Display */
+.winner-display {
+  text-align: center;
+  margin: 20px 0;
+  padding: 20px;
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  border-radius: 12px;
+  border: 2px solid var(--warning);
+}
+
+.winner-message {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #92400e;
+  animation: celebrate 0.5s ease infinite alternate;
+}
+
+.tie-message {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #92400e;
+}
+
+.tie-message small {
+  display: block;
+  margin-top: 10px;
+  font-size: 0.9rem;
+  color: #b45309;
+}
+
+@keyframes celebrate {
+  from { transform: scale(1); }
+  to { transform: scale(1.05); }
+}
+
+/* Next Round Countdown */
+.next-round-countdown {
+  text-align: center;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--primary);
+  padding: 15px;
+  background: var(--bg-light);
+  border-radius: 8px;
+  margin: 15px 0;
+}
+
+/* Winner row in results */
+.results-table tr.winner {
+  background: linear-gradient(135deg, #fef3c7, #fde68a) !important;
+}
+
+.results-table tr.winner td {
+  color: #92400e !important;
+  font-weight: 600;
+}
+
+/* Host disabled buttons */
+.choice-btn.host-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: var(--border);
+}
+
+.choice-btn.host-disabled:hover {
+  transform: none;
+  border-color: var(--border);
 }

@@ -9,7 +9,8 @@ let state = {
   username: '',
   currentChoice: null,
   timerInterval: null,
-  timeLeft: 7
+  timeLeft: 5,
+  resultsTimer: null
 };
 
 // DOM Elements
@@ -105,9 +106,11 @@ function startTimer(duration) {
     if (state.timeLeft <= 0) {
       clearInterval(state.timerInterval);
       state.timerInterval = null;
+      choiceBtns.forEach(b => b.classList.add('disabled'));
       if (!state.currentChoice) {
         choiceStatus.textContent = "Time's up! You didn't choose.";
-        choiceBtns.forEach(b => b.classList.add('disabled'));
+      } else {
+        choiceStatus.textContent = `Time's up! Your choice: ${state.currentChoice}`;
       }
     }
   }, 1000);
@@ -191,19 +194,30 @@ leaveRoomBtn.addEventListener('click', () => {
 
 choiceBtns.forEach(btn => {
   btn.addEventListener('click', () => {
-    if (state.currentChoice) return;
+    // Host cannot play
+    if (state.isHost) {
+      showToast('You are the host - observer only!', 'warning');
+      return;
+    }
+    
+    // Don't allow if timer expired
+    if (state.timeLeft <= 0) return;
 
     const choice = btn.dataset.choice;
+    const previousChoice = state.currentChoice;
     state.currentChoice = choice;
 
+    // Update button styles - allow changing
     choiceBtns.forEach(b => {
       b.classList.remove('selected');
-      b.classList.add('disabled');
     });
     btn.classList.add('selected');
-    btn.classList.remove('disabled');
 
-    choiceStatus.textContent = `You chose ${choice}! Waiting for others...`;
+    if (previousChoice && previousChoice !== choice) {
+      choiceStatus.textContent = `Changed to ${choice}! (You can change again)`;
+    } else {
+      choiceStatus.textContent = `You chose ${choice}! (You can change until time runs out)`;
+    }
     socket.emit('makeChoice', choice);
   });
 });
@@ -304,14 +318,23 @@ socket.on('gameStarted', ({ roundNumber: round, timerDuration }) => {
   state.currentChoice = null;
   roundNumber.textContent = round;
   readyStatus.textContent = '0/0 players ready';
-  choiceStatus.textContent = '';
-
-  choiceBtns.forEach(btn => {
-    btn.classList.remove('selected', 'disabled');
-  });
+  
+  // Show different message for host (observer)
+  if (state.isHost) {
+    choiceStatus.textContent = '👁️ You are observing - watch the players!';
+    choiceBtns.forEach(btn => {
+      btn.classList.remove('selected', 'disabled');
+      btn.classList.add('host-disabled');
+    });
+  } else {
+    choiceStatus.textContent = '';
+    choiceBtns.forEach(btn => {
+      btn.classList.remove('selected', 'disabled', 'host-disabled');
+    });
+  }
 
   showScreen('game');
-  showToast(`Round ${round} started! You have ${timerDuration} seconds!`, 'success');
+  showToast(`Round ${round}! ${timerDuration} seconds to choose!`, 'success');
   
   // Start the countdown timer
   startTimer(timerDuration);
@@ -321,7 +344,7 @@ socket.on('playerReady', ({ readyCount, totalCount }) => {
   readyStatus.textContent = `${readyCount}/${totalCount} players ready`;
 });
 
-socket.on('gameResults', ({ results, choiceCounts, roundNumber: round }) => {
+socket.on('gameResults', ({ results, choiceCounts, roundNumber: round, hasWinner, isTie, winners, pointsToWin }) => {
   // Stop the timer
   stopTimer();
   
@@ -335,6 +358,11 @@ socket.on('gameResults', ({ results, choiceCounts, roundNumber: round }) => {
     const tr = document.createElement('tr');
     if (player.id === state.playerId) {
       tr.classList.add('highlight');
+    }
+    
+    // Highlight winners
+    if (player.totalPoints >= pointsToWin) {
+      tr.classList.add('winner');
     }
     
     // Add medal for top 3
@@ -355,6 +383,44 @@ socket.on('gameResults', ({ results, choiceCounts, roundNumber: round }) => {
     resultsBody.appendChild(tr);
   });
 
+  // Update winner display
+  const winnerDisplay = document.getElementById('winnerDisplay');
+  const nextRoundCountdown = document.getElementById('nextRoundCountdown');
+  
+  if (hasWinner) {
+    if (isTie) {
+      winnerDisplay.innerHTML = `<div class="tie-message">🏆 TIE! ${winners.join(' & ')} reached ${pointsToWin} points!<br><small>Host: Create a tiebreaker room!</small></div>`;
+    } else {
+      winnerDisplay.innerHTML = `<div class="winner-message">🎉 ${winners[0]} WINS with ${pointsToWin} points! 🎉</div>`;
+    }
+    winnerDisplay.style.display = 'block';
+    nextRoundCountdown.style.display = 'none';
+    
+    // Show host controls for new game
+    if (state.isHost) {
+      playAgainBtn.style.display = 'none';
+      backToLobbyBtn.style.display = 'inline-block';
+    }
+  } else {
+    winnerDisplay.style.display = 'none';
+    nextRoundCountdown.style.display = 'block';
+    
+    // Start countdown to next round
+    let countdown = 5;
+    nextRoundCountdown.textContent = `Next round in ${countdown}...`;
+    
+    if (state.resultsTimer) clearInterval(state.resultsTimer);
+    state.resultsTimer = setInterval(() => {
+      countdown--;
+      if (countdown > 0) {
+        nextRoundCountdown.textContent = `Next round in ${countdown}...`;
+      } else {
+        nextRoundCountdown.textContent = 'Starting...';
+        clearInterval(state.resultsTimer);
+      }
+    }, 1000);
+  }
+
   updateHostUI();
   showScreen('results');
 });
@@ -362,8 +428,16 @@ socket.on('gameResults', ({ results, choiceCounts, roundNumber: round }) => {
 socket.on('returnedToLobby', () => {
   state.currentChoice = null;
   stopTimer();
+  if (state.resultsTimer) {
+    clearInterval(state.resultsTimer);
+    state.resultsTimer = null;
+  }
   showScreen('lobby');
   showToast('Returned to lobby - scores reset', 'success');
+});
+
+socket.on('choiceChanged', ({ from, to }) => {
+  showToast(`Changed from ${from} to ${to}`, 'info');
 });
 
 socket.on('error', ({ message }) => {

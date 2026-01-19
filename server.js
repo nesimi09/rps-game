@@ -23,7 +23,13 @@ const rooms = new Map();
 const CHOICES = ['rock', 'paper', 'scissors'];
 
 // Timer duration in seconds
-const TIMER_DURATION = 7;
+const TIMER_DURATION = 5;
+
+// Results display duration before auto-skip
+const RESULTS_DURATION = 5;
+
+// Points needed to win
+const POINTS_TO_WIN = 10;
 
 // Determine winner between two choices
 function getResult(choice1, choice2) {
@@ -40,7 +46,8 @@ function getResult(choice1, choice2) {
 
 // Calculate game results with cumulative points
 function calculateResults(room) {
-  const players = Array.from(room.players.values());
+  // Exclude host from game calculations - host is observer only
+  const players = Array.from(room.players.values()).filter(p => !p.isHost);
   const results = [];
   
   // Count choices (only from players who made a choice)
@@ -109,7 +116,59 @@ function endRound(roomId) {
 
   room.gameState = 'results';
   const { results, choiceCounts } = calculateResults(room);
-  io.to(room.id).emit('gameResults', { results, choiceCounts, roundNumber: room.roundNumber });
+  
+  // Check for winners (players with 10+ points)
+  const winners = results.filter(p => p.totalPoints >= POINTS_TO_WIN);
+  const hasWinner = winners.length > 0;
+  const isTie = winners.length > 1;
+  
+  io.to(room.id).emit('gameResults', { 
+    results, 
+    choiceCounts, 
+    roundNumber: room.roundNumber,
+    hasWinner,
+    isTie,
+    winners: winners.map(w => w.username),
+    pointsToWin: POINTS_TO_WIN
+  });
+  
+  // If no winner yet, auto-start next round after 5 seconds
+  if (!hasWinner) {
+    room.resultsTimer = setTimeout(() => {
+      startNextRound(roomId);
+    }, RESULTS_DURATION * 1000);
+  }
+}
+
+// Start the next round automatically
+function startNextRound(roomId) {
+  const room = rooms.get(roomId);
+  if (!room || room.gameState !== 'results') return;
+  
+  // Clear results timer
+  if (room.resultsTimer) {
+    clearTimeout(room.resultsTimer);
+    room.resultsTimer = null;
+  }
+  
+  room.gameState = 'playing';
+  room.roundNumber++;
+
+  // Reset all player choices for new round (keep totalPoints)
+  room.players.forEach(player => {
+    player.choice = null;
+    player.isReady = false;
+  });
+
+  io.to(room.id).emit('gameStarted', { 
+    roundNumber: room.roundNumber,
+    timerDuration: TIMER_DURATION
+  });
+
+  // Set timer to end round
+  room.roundTimer = setTimeout(() => {
+    endRound(room.id);
+  }, TIMER_DURATION * 1000);
 }
 
 // Clean up empty rooms periodically
@@ -228,8 +287,10 @@ io.on('connection', (socket) => {
       return;
     }
 
-    if (room.players.size < 2) {
-      socket.emit('error', { message: 'Need at least 2 players to start' });
+    // Need at least 2 non-host players
+    const nonHostPlayers = Array.from(room.players.values()).filter(p => !p.isHost);
+    if (nonHostPlayers.length < 2) {
+      socket.emit('error', { message: 'Need at least 2 players (excluding host) to start' });
       return;
     }
 
@@ -242,19 +303,19 @@ io.on('connection', (socket) => {
       player.isReady = false;
     });
 
-    // Start the 7-second timer
+    // Start the 5-second timer
     io.to(room.id).emit('gameStarted', { 
       roundNumber: room.roundNumber,
       timerDuration: TIMER_DURATION
     });
 
-    // Set timer to end round after 7 seconds
+    // Set timer to end round after 5 seconds
     room.roundTimer = setTimeout(() => {
       endRound(room.id);
     }, TIMER_DURATION * 1000);
   });
 
-  // Player makes a choice
+  // Player makes a choice (can change within time limit)
   socket.on('makeChoice', (choice) => {
     const room = rooms.get(socket.roomId);
     if (!room) return;
@@ -270,21 +331,39 @@ io.on('connection', (socket) => {
     }
 
     const player = room.players.get(socket.id);
-    if (player && !player.choice) {
+    
+    // Host cannot play - observer only
+    if (player && player.isHost) {
+      socket.emit('error', { message: 'Host is observer only and cannot play' });
+      return;
+    }
+    
+    // Allow changing choice within time limit
+    if (player) {
+      const previousChoice = player.choice;
       player.choice = choice;
       player.isReady = true;
+      
+      // Notify player of choice change
+      if (previousChoice && previousChoice !== choice) {
+        socket.emit('choiceChanged', { from: previousChoice, to: choice });
+      }
     }
 
+    // Count only non-host players for ready status
+    const nonHostPlayers = Array.from(room.players.values()).filter(p => !p.isHost);
+    const readyCount = nonHostPlayers.filter(p => p.isReady).length;
+    
     // Notify all players about ready status
     io.to(room.id).emit('playerReady', {
       playerId: socket.id,
       username: player.username,
-      readyCount: Array.from(room.players.values()).filter(p => p.isReady).length,
-      totalCount: room.players.size
+      readyCount: readyCount,
+      totalCount: nonHostPlayers.length
     });
 
-    // Check if all players have made their choice - end early
-    const allReady = Array.from(room.players.values()).every(p => p.isReady);
+    // Check if all non-host players have made their choice - end early
+    const allReady = nonHostPlayers.every(p => p.isReady);
     if (allReady) {
       endRound(room.id);
     }
@@ -325,10 +404,14 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Clear timer if exists
+    // Clear timers if exist
     if (room.roundTimer) {
       clearTimeout(room.roundTimer);
       room.roundTimer = null;
+    }
+    if (room.resultsTimer) {
+      clearTimeout(room.resultsTimer);
+      room.resultsTimer = null;
     }
 
     room.gameState = 'lobby';
