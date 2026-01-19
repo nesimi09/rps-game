@@ -7,175 +7,191 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+  cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
-// Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Store rooms and players
 const rooms = new Map();
-
-// Game choices
 const CHOICES = ['rock', 'paper', 'scissors'];
-
-// Timer duration in seconds
 const TIMER_DURATION = 5;
-
-// Results display duration before auto-skip
 const RESULTS_DURATION = 5;
 
-// Points needed to win
-const POINTS_TO_WIN = 10;
-
-// Determine winner between two choices
 function getResult(choice1, choice2) {
   if (choice1 === choice2) return 'tie';
   if (
     (choice1 === 'rock' && choice2 === 'scissors') ||
     (choice1 === 'paper' && choice2 === 'rock') ||
     (choice1 === 'scissors' && choice2 === 'paper')
-  ) {
-    return 'win';
-  }
+  ) return 'win';
   return 'lose';
 }
 
-// Calculate game results with cumulative points
-function calculateResults(room) {
-  // Exclude host from game calculations - host is observer only
-  const players = Array.from(room.players.values()).filter(p => !p.isHost);
-  const results = [];
-  
-  // Count choices (only from players who made a choice)
-  const choiceCounts = { rock: 0, paper: 0, scissors: 0 };
-  const playersWhoChose = players.filter(p => p.choice);
-  const playersWhoDidntChoose = players.filter(p => !p.choice);
-  
-  playersWhoChose.forEach(player => {
-    choiceCounts[player.choice]++;
-  });
-
-  // Calculate each player's round score
-  players.forEach(player => {
-    let roundWins = 0;
-    let roundLosses = 0;
-    let roundTies = 0;
-
-    if (player.choice) {
-      // Player made a choice - compare against others who chose
-      playersWhoChose.forEach(opponent => {
-        if (player.id !== opponent.id) {
-          const result = getResult(player.choice, opponent.choice);
-          if (result === 'win') roundWins++;
-          else if (result === 'lose') roundLosses++;
-          else roundTies++;
-        }
-      });
-      // Player who chose beats everyone who didn't choose
-      roundWins += playersWhoDidntChoose.length;
-    } else {
-      // Player didn't choose - loses to everyone who did choose
-      roundLosses = playersWhoChose.length;
-    }
-
-    // Update cumulative points (1 point per win)
-    player.totalPoints = (player.totalPoints || 0) + roundWins;
-
-    results.push({
-      id: player.id,
-      username: player.username,
-      choice: player.choice || 'none',
-      roundWins,
-      roundLosses,
-      roundTies,
-      roundScore: roundWins - roundLosses,
-      totalPoints: player.totalPoints
-    });
-  });
-
-  // Sort by total points (cumulative ranking)
-  results.sort((a, b) => b.totalPoints - a.totalPoints);
-
-  return { results, choiceCounts };
+function shuffleArray(array) {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
 }
 
-// End the round (called by timer or when all players ready)
+function createPairings(players) {
+  const shuffled = shuffleArray(players);
+  const pairs = [];
+  for (let i = 0; i < shuffled.length - 1; i += 2) {
+    pairs.push([shuffled[i], shuffled[i + 1]]);
+  }
+  // If odd, last player has no opponent
+  const leftover = shuffled.length % 2 === 1 ? shuffled[shuffled.length - 1] : null;
+  return { pairs, leftover };
+}
+
 function endRound(roomId) {
   const room = rooms.get(roomId);
   if (!room || room.gameState !== 'playing') return;
 
-  // Clear the timer
   if (room.roundTimer) {
     clearTimeout(room.roundTimer);
     room.roundTimer = null;
   }
 
   room.gameState = 'results';
-  const { results, choiceCounts } = calculateResults(room);
-  
-  // Check for winners (players with 10+ points)
-  const winners = results.filter(p => p.totalPoints >= POINTS_TO_WIN);
-  const hasWinner = winners.length > 0;
-  const isTie = winners.length > 1;
-  
-  io.to(room.id).emit('gameResults', { 
-    results, 
-    choiceCounts, 
-    roundNumber: room.roundNumber,
-    hasWinner,
-    isTie,
-    winners: winners.map(w => w.username),
-    pointsToWin: POINTS_TO_WIN
+
+  // Process pairings
+  room.pairings.forEach(([p1, p2]) => {
+    const player1 = room.players.get(p1.id);
+    const player2 = room.players.get(p2.id);
+    if (!player1 || !player2) return;
+
+    const c1 = player1.choice || null;
+    const c2 = player2.choice || null;
+
+    if (c1 && c2) {
+      const result = getResult(c1, c2);
+      if (result === 'win') {
+        player1.wins++;
+        player1.roundResult = 'win';
+        player2.roundResult = 'lose';
+      } else if (result === 'lose') {
+        player2.wins++;
+        player1.roundResult = 'lose';
+        player2.roundResult = 'win';
+      } else {
+        player1.roundResult = 'tie';
+        player2.roundResult = 'tie';
+      }
+    } else if (c1 && !c2) {
+      player1.wins++;
+      player1.roundResult = 'win';
+      player2.roundResult = 'lose';
+    } else if (!c1 && c2) {
+      player2.wins++;
+      player1.roundResult = 'lose';
+      player2.roundResult = 'win';
+    } else {
+      player1.roundResult = 'tie';
+      player2.roundResult = 'tie';
+    }
+
+    player1.opponentChoice = c2;
+    player2.opponentChoice = c1;
   });
-  
-  // If no winner yet, auto-start next round after 5 seconds
-  if (!hasWinner) {
-    room.resultsTimer = setTimeout(() => {
-      startNextRound(roomId);
-    }, RESULTS_DURATION * 1000);
+
+  if (room.leftover) {
+    const p = room.players.get(room.leftover.id);
+    if (p) p.roundResult = 'no_opponent';
   }
+
+  // Build leaderboard (non-host players sorted by wins)
+  const leaderboard = Array.from(room.players.values())
+    .filter(p => !p.isHost)
+    .map(p => ({ id: p.id, username: p.username, wins: p.wins }))
+    .sort((a, b) => b.wins - a.wins);
+
+  // Send results to each player
+  room.players.forEach((player, id) => {
+    const opponent = room.pairings.find(pair => pair[0].id === id || pair[1].id === id);
+    let opponentName = null;
+    let opponentChoice = null;
+    if (opponent) {
+      const other = opponent[0].id === id ? opponent[1] : opponent[0];
+      const otherPlayer = room.players.get(other.id);
+      opponentName = otherPlayer?.username || 'Unknown';
+      opponentChoice = player.opponentChoice;
+    }
+
+    io.to(id).emit('gameResults', {
+      leaderboard,
+      roundNumber: room.roundNumber,
+      yourResult: player.isHost ? 'observer' : player.roundResult,
+      opponentName,
+      yourChoice: player.choice,
+      opponentChoice
+    });
+  });
+
+  // Auto-start next round
+  room.resultsTimer = setTimeout(() => {
+    startNextRound(roomId);
+  }, RESULTS_DURATION * 1000);
 }
 
-// Start the next round automatically
 function startNextRound(roomId) {
   const room = rooms.get(roomId);
   if (!room || room.gameState !== 'results') return;
-  
-  // Clear results timer
+
   if (room.resultsTimer) {
     clearTimeout(room.resultsTimer);
     room.resultsTimer = null;
   }
-  
+
   room.gameState = 'playing';
   room.roundNumber++;
 
-  // Reset all player choices for new round (keep totalPoints)
+  // Reset choices
   room.players.forEach(player => {
     player.choice = null;
     player.isReady = false;
+    player.roundResult = null;
+    player.opponentChoice = null;
   });
 
-  io.to(room.id).emit('gameStarted', { 
-    roundNumber: room.roundNumber,
-    timerDuration: TIMER_DURATION
+  // Create new random pairings (non-host players)
+  const nonHostPlayers = Array.from(room.players.values())
+    .filter(p => !p.isHost)
+    .map(p => ({ id: p.id, username: p.username }));
+
+  const { pairs, leftover } = createPairings(nonHostPlayers);
+  room.pairings = pairs;
+  room.leftover = leftover;
+
+  // Build opponent map
+  const opponentMap = {};
+  pairs.forEach(([p1, p2]) => {
+    opponentMap[p1.id] = p2.username;
+    opponentMap[p2.id] = p1.username;
   });
 
-  // Set timer to end round
+  // Emit to each player with their opponent
+  room.players.forEach((player, id) => {
+    io.to(id).emit('gameStarted', {
+      roundNumber: room.roundNumber,
+      timerDuration: TIMER_DURATION,
+      opponent: opponentMap[id] || null
+    });
+  });
+
   room.roundTimer = setTimeout(() => {
     endRound(room.id);
   }, TIMER_DURATION * 1000);
 }
 
-// Clean up empty rooms periodically
 setInterval(() => {
   rooms.forEach((room, roomId) => {
     if (room.players.size === 0) {
       if (room.roundTimer) clearTimeout(room.roundTimer);
+      if (room.resultsTimer) clearTimeout(room.resultsTimer);
       rooms.delete(roomId);
     }
   });
@@ -184,205 +200,148 @@ setInterval(() => {
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
-  // Check if username is available in a room
-  socket.on('checkUsername', ({ roomId, username }) => {
-    const room = rooms.get(roomId);
-    
-    if (!room) {
-      socket.emit('usernameCheckResult', { available: false, error: 'Room not found' });
-      return;
-    }
-
-    const existingUsernames = Array.from(room.players.values()).map(p => p.username.toLowerCase());
-    const isAvailable = !existingUsernames.includes(username.toLowerCase());
-    
-    socket.emit('usernameCheckResult', { available: isAvailable, error: isAvailable ? null : 'Username already taken' });
-  });
-
-  // Create a new room
   socket.on('createRoom', (username) => {
     const roomId = uuidv4().substring(0, 8);
     const room = {
       id: roomId,
       hostId: socket.id,
       players: new Map(),
-      gameState: 'lobby', // lobby, playing, results
+      gameState: 'lobby',
       roundNumber: 0,
-      roundTimer: null
+      roundTimer: null,
+      resultsTimer: null,
+      pairings: [],
+      leftover: null
     };
 
     room.players.set(socket.id, {
       id: socket.id,
-      username: username,
+      username,
       isHost: true,
       choice: null,
       isReady: false,
-      totalPoints: 0
+      wins: 0,
+      roundResult: null,
+      opponentChoice: null
     });
 
     rooms.set(roomId, room);
     socket.join(roomId);
     socket.roomId = roomId;
 
-    socket.emit('roomCreated', {
-      roomId,
-      playerId: socket.id,
-      isHost: true
-    });
-
+    socket.emit('roomCreated', { roomId, playerId: socket.id, isHost: true });
     io.to(roomId).emit('playerList', getPlayerList(room));
   });
 
-  // Join an existing room
   socket.on('joinRoom', ({ roomId, username }) => {
     const room = rooms.get(roomId);
-
     if (!room) {
       socket.emit('error', { message: 'Room not found' });
       return;
     }
-
     if (room.gameState !== 'lobby') {
       socket.emit('error', { message: 'Game already in progress' });
       return;
     }
 
-    // Check for duplicate username (case-insensitive, reject if taken)
     const existingUsernames = Array.from(room.players.values()).map(p => p.username.toLowerCase());
     if (existingUsernames.includes(username.toLowerCase())) {
-      socket.emit('error', { message: 'Username already taken. Please choose a different name.' });
+      socket.emit('error', { message: 'Name already taken. Choose a different name.' });
       return;
     }
 
     room.players.set(socket.id, {
       id: socket.id,
-      username: username,
+      username,
       isHost: false,
       choice: null,
       isReady: false,
-      totalPoints: 0
+      wins: 0,
+      roundResult: null,
+      opponentChoice: null
     });
 
     socket.join(roomId);
     socket.roomId = roomId;
 
-    socket.emit('roomJoined', {
-      roomId,
-      playerId: socket.id,
-      isHost: false,
-      username: username
-    });
-
+    socket.emit('roomJoined', { roomId, playerId: socket.id, isHost: false, username });
     io.to(roomId).emit('playerList', getPlayerList(room));
-    io.to(roomId).emit('playerJoined', { username: username });
+    io.to(roomId).emit('playerJoined', { username });
   });
 
-  // Host starts the game
   socket.on('startGame', () => {
     const room = rooms.get(socket.roomId);
     if (!room) return;
-
     if (room.hostId !== socket.id) {
-      socket.emit('error', { message: 'Only the host can start the game' });
+      socket.emit('error', { message: 'Only the host can start' });
       return;
     }
 
-    // Need at least 2 non-host players
     const nonHostPlayers = Array.from(room.players.values()).filter(p => !p.isHost);
     if (nonHostPlayers.length < 2) {
-      socket.emit('error', { message: 'Need at least 2 players (excluding host) to start' });
+      socket.emit('error', { message: 'Need at least 2 players to start' });
       return;
     }
 
     room.gameState = 'playing';
     room.roundNumber++;
 
-    // Reset all player choices for new round (keep totalPoints)
     room.players.forEach(player => {
       player.choice = null;
       player.isReady = false;
+      player.roundResult = null;
+      player.opponentChoice = null;
     });
 
-    // Start the 5-second timer
-    io.to(room.id).emit('gameStarted', { 
-      roundNumber: room.roundNumber,
-      timerDuration: TIMER_DURATION
+    const { pairs, leftover } = createPairings(nonHostPlayers.map(p => ({ id: p.id, username: p.username })));
+    room.pairings = pairs;
+    room.leftover = leftover;
+
+    const opponentMap = {};
+    pairs.forEach(([p1, p2]) => {
+      opponentMap[p1.id] = p2.username;
+      opponentMap[p2.id] = p1.username;
     });
 
-    // Set timer to end round after 5 seconds
+    room.players.forEach((player, id) => {
+      io.to(id).emit('gameStarted', {
+        roundNumber: room.roundNumber,
+        timerDuration: TIMER_DURATION,
+        opponent: opponentMap[id] || null
+      });
+    });
+
     room.roundTimer = setTimeout(() => {
       endRound(room.id);
     }, TIMER_DURATION * 1000);
   });
 
-  // Player makes a choice (can change within time limit)
   socket.on('makeChoice', (choice) => {
     const room = rooms.get(socket.roomId);
-    if (!room) return;
-
-    if (room.gameState !== 'playing') {
-      socket.emit('error', { message: 'Game is not in progress' });
-      return;
-    }
-
-    if (!CHOICES.includes(choice)) {
-      socket.emit('error', { message: 'Invalid choice' });
-      return;
-    }
+    if (!room || room.gameState !== 'playing') return;
+    if (!CHOICES.includes(choice)) return;
 
     const player = room.players.get(socket.id);
-    
-    // Host cannot play - observer only
-    if (player && player.isHost) {
-      socket.emit('error', { message: 'Host is observer only and cannot play' });
-      return;
-    }
-    
-    // Allow changing choice within time limit
-    if (player) {
-      const previousChoice = player.choice;
-      player.choice = choice;
-      player.isReady = true;
-      
-      // Notify player of choice change
-      if (previousChoice && previousChoice !== choice) {
-        socket.emit('choiceChanged', { from: previousChoice, to: choice });
-      }
-    }
+    if (!player || player.isHost) return;
 
-    // Count only non-host players for ready status
-    const nonHostPlayers = Array.from(room.players.values()).filter(p => !p.isHost);
-    const readyCount = nonHostPlayers.filter(p => p.isReady).length;
-    
-    // Notify all players about ready status
-    io.to(room.id).emit('playerReady', {
-      playerId: socket.id,
-      username: player.username,
-      readyCount: readyCount,
-      totalCount: nonHostPlayers.length
+    player.choice = choice;
+    player.isReady = true;
+
+    // Check if all paired players are ready
+    const allReady = room.pairings.every(([p1, p2]) => {
+      const pl1 = room.players.get(p1.id);
+      const pl2 = room.players.get(p2.id);
+      return pl1?.isReady && pl2?.isReady;
     });
 
-    // Check if all non-host players have made their choice - end early
-    const allReady = nonHostPlayers.every(p => p.isReady);
-    if (allReady) {
+    if (allReady && room.pairings.length > 0) {
       endRound(room.id);
     }
   });
 
-  // Host kicks a player
   socket.on('kickPlayer', (playerId) => {
     const room = rooms.get(socket.roomId);
-    if (!room) return;
-
-    if (room.hostId !== socket.id) {
-      socket.emit('error', { message: 'Only the host can kick players' });
-      return;
-    }
-
-    if (playerId === socket.id) {
-      socket.emit('error', { message: 'Cannot kick yourself' });
-      return;
-    }
+    if (!room || room.hostId !== socket.id || playerId === socket.id) return;
 
     const kickedPlayer = room.players.get(playerId);
     if (kickedPlayer) {
@@ -394,39 +353,30 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Return to lobby (host only)
   socket.on('returnToLobby', () => {
     const room = rooms.get(socket.roomId);
-    if (!room) return;
+    if (!room || room.hostId !== socket.id) return;
 
-    if (room.hostId !== socket.id) {
-      socket.emit('error', { message: 'Only the host can return to lobby' });
-      return;
-    }
-
-    // Clear timers if exist
-    if (room.roundTimer) {
-      clearTimeout(room.roundTimer);
-      room.roundTimer = null;
-    }
-    if (room.resultsTimer) {
-      clearTimeout(room.resultsTimer);
-      room.resultsTimer = null;
-    }
+    if (room.roundTimer) clearTimeout(room.roundTimer);
+    if (room.resultsTimer) clearTimeout(room.resultsTimer);
 
     room.gameState = 'lobby';
+    room.roundNumber = 0;
+    room.pairings = [];
+    room.leftover = null;
+
     room.players.forEach(player => {
       player.choice = null;
       player.isReady = false;
-      player.totalPoints = 0; // Reset points when returning to lobby
+      player.wins = 0;
+      player.roundResult = null;
+      player.opponentChoice = null;
     });
-    room.roundNumber = 0;
 
     io.to(room.id).emit('returnedToLobby');
     io.to(room.id).emit('playerList', getPlayerList(room));
   });
 
-  // Handle disconnect
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
     const room = rooms.get(socket.roomId);
@@ -440,11 +390,11 @@ io.on('connection', (socket) => {
 
     if (room.players.size === 0) {
       if (room.roundTimer) clearTimeout(room.roundTimer);
+      if (room.resultsTimer) clearTimeout(room.resultsTimer);
       rooms.delete(socket.roomId);
       return;
     }
 
-    // Transfer host if host left
     if (wasHost) {
       const newHost = room.players.values().next().value;
       if (newHost) {
@@ -464,13 +414,11 @@ function getPlayerList(room) {
     id: player.id,
     username: player.username,
     isHost: player.isHost,
-    isReady: player.isReady,
-    totalPoints: player.totalPoints || 0
+    wins: player.wins
   }));
 }
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  console.log(`Open http://localhost:${PORT} in your browser`);
 });

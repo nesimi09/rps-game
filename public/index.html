@@ -3,18 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Rock Paper Scissors - Multiplayer</title>
+  <title>Rock Paper Scissors Event</title>
   <link rel="stylesheet" href="styles.css">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
   <div class="container">
-    <!-- Home Screen -->
+    <!-- Home Screen (Create Room) -->
     <div id="homeScreen" class="screen active">
       <div class="logo">
         <h1>✊ ✋ ✌️</h1>
-        <h2>Rock Paper Scissors</h2>
-        <p>Multiplayer Edition</p>
+        <h2>Rock Paper Scissors Event</h2>
       </div>
       
       <div class="home-actions">
@@ -23,20 +22,23 @@
           <input type="text" id="hostUsername" placeholder="Enter your name" maxlength="20">
         </div>
         <button id="createRoomBtn" class="btn btn-primary">Create Room</button>
-        
-        <div class="divider">
-          <span>or</span>
-        </div>
-        
+      </div>
+    </div>
+
+    <!-- Join Screen (shown when ?room= in URL) -->
+    <div id="joinScreen" class="screen">
+      <div class="logo">
+        <h1>✊ ✋ ✌️</h1>
+        <h2>Rock Paper Scissors Event</h2>
+        <p>You've been invited!</p>
+      </div>
+      
+      <div class="home-actions">
         <div class="input-group">
-          <label for="joinUsername">Your Name</label>
-          <input type="text" id="joinUsername" placeholder="Enter your name" maxlength="20">
+          <label for="joinUsername">Enter Your Name to Join</label>
+          <input type="text" id="joinUsername" placeholder="Your name" maxlength="20">
         </div>
-        <div class="input-group">
-          <label for="roomCodeInput">Room Code</label>
-          <input type="text" id="roomCodeInput" placeholder="Enter room code" maxlength="8">
-        </div>
-        <button id="joinRoomBtn" class="btn btn-secondary">Join Room</button>
+        <button id="joinRoomBtn" class="btn btn-primary">Join Game</button>
       </div>
     </div>
 
@@ -48,9 +50,9 @@
           <span>Room Code: </span>
           <span id="roomCode" class="room-code"></span>
           <button id="copyLinkBtn" class="btn btn-small">Copy Link</button>
+          <button id="copyCodeBtn" class="btn btn-small">Copy Code</button>
         </div>
       </div>
-
       <div class="players-section">
         <h3>Players <span id="playerCount">(0)</span></h3>
         <ul id="playerList" class="player-list"></ul>
@@ -68,12 +70,10 @@
     <div id="gameScreen" class="screen">
       <div class="game-header">
         <h2>Round <span id="roundNumber">1</span></h2>
+        <div id="opponentInfo" class="opponent-info"></div>
         <div class="timer-container">
           <span class="timer-label">Time Left:</span>
-          <span id="timerDisplay" class="timer-display">7</span>
-        </div>
-        <div class="timer-info">
-          <span id="readyStatus">0/0 players ready</span>
+          <span id="timerDisplay" class="timer-display">5</span>
         </div>
       </div>
 
@@ -101,52 +101,33 @@
     <div id="resultsScreen" class="screen">
       <div class="results-header">
         <h2>Round <span id="resultsRound">1</span> Results</h2>
-      </div>
-
-      <div class="choice-summary">
-        <div class="choice-count" id="rockCount">
-          <span class="choice-emoji">✊</span>
-          <span class="count">0</span>
-        </div>
-        <div class="choice-count" id="paperCount">
-          <span class="choice-emoji">✋</span>
-          <span class="count">0</span>
-        </div>
-        <div class="choice-count" id="scissorsCount">
-          <span class="choice-emoji">✌️</span>
-          <span class="count">0</span>
-        </div>
+        <div id="roundResult" class="round-result"></div>
       </div>
 
       <div class="results-table-container">
+        <h3>Leaderboard</h3>
         <table class="results-table">
           <thead>
             <tr>
-              <th>Rank</th>
+              <th>#</th>
               <th>Player</th>
-              <th>Choice</th>
-              <th>+Wins</th>
-              <th>-Losses</th>
-              <th>Ties</th>
-              <th>Total Pts</th>
+              <th>Wins</th>
             </tr>
           </thead>
           <tbody id="resultsBody"></tbody>
         </table>
       </div>
 
-      <div id="winnerDisplay" class="winner-display" style="display: none;"></div>
       <div id="nextRoundCountdown" class="next-round-countdown"></div>
 
       <div class="results-actions">
-        <button id="playAgainBtn" class="btn btn-primary host-only" style="display: none;">New Game</button>
         <button id="backToLobbyBtn" class="btn btn-secondary host-only" style="display: none;">Back to Lobby</button>
-        <p id="waitingNextRound" class="waiting-message">Waiting for host...</p>
+        <p id="waitingNextRound" class="waiting-message">Next round starting soon...</p>
       </div>
     </div>
 
     <!-- Watermark -->
-    <div class="watermark">nesimi09's RPS Game</div>
+    <div class="watermark">created by zorojuro</div>
 
     <!-- Toast Notifications -->
     <div id="toastContainer" class="toast-container"></div>
