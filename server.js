@@ -300,6 +300,11 @@ io.on('connection', (socket) => {
       socket.emit('error', { message: 'Need at least 2 players to start' });
       return;
     }
+    
+    if (nonHostPlayers.length % 2 !== 0) {
+      socket.emit('error', { message: `Need an even number of players to start. Currently ${nonHostPlayers.length} players.` });
+      return;
+    }
 
     room.gameState = 'playing';
     room.roundNumber++;
