@@ -18,31 +18,25 @@
       </div>
       
       <div class="home-actions">
-        <!-- Join Section (shown when ?room= is in URL) -->
-        <div id="joinSection">
-          <div class="input-group">
-            <label for="joinUsername">Enter Your Name to Join</label>
-            <input type="text" id="joinUsername" placeholder="Enter your name" maxlength="20">
-          </div>
-          <div class="input-group">
-            <label for="roomCodeInput">Room Code</label>
-            <input type="text" id="roomCodeInput" placeholder="Enter room code" maxlength="8">
-          </div>
-          <button id="joinRoomBtn" class="btn btn-primary">Join Room</button>
+        <div class="input-group">
+          <label for="hostUsername">Your Name</label>
+          <input type="text" id="hostUsername" placeholder="Enter your name" maxlength="20">
+        </div>
+        <button id="createRoomBtn" class="btn btn-primary">Create Room</button>
+        
+        <div class="divider">
+          <span>or</span>
         </div>
         
-        <!-- Create Section -->
-        <div id="createSection">
-          <div class="divider">
-            <span>or create a new room</span>
-          </div>
-          
-          <div class="input-group">
-            <label for="hostUsername">Your Name</label>
-            <input type="text" id="hostUsername" placeholder="Enter your name" maxlength="20">
-          </div>
-          <button id="createRoomBtn" class="btn btn-secondary">Create Room</button>
+        <div class="input-group">
+          <label for="joinUsername">Your Name</label>
+          <input type="text" id="joinUsername" placeholder="Enter your name" maxlength="20">
         </div>
+        <div class="input-group">
+          <label for="roomCodeInput">Room Code</label>
+          <input type="text" id="roomCodeInput" placeholder="Enter room code" maxlength="8">
+        </div>
+        <button id="joinRoomBtn" class="btn btn-secondary">Join Room</button>
       </div>
     </div>
 

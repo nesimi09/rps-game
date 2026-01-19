@@ -133,33 +133,13 @@ function stopTimer() {
   }
 }
 
-// Check for room code in URL and setup auto-join
+// Check for room code in URL and prefill join form
 function checkUrlForRoomCode() {
   const urlParams = new URLSearchParams(window.location.search);
   const roomCode = urlParams.get('room');
-  const nameParam = urlParams.get('name') || urlParams.get('username');
   if (roomCode) {
-    // Show only join section, hide create section
     roomCodeInput.value = roomCode;
-    if (createSection) createSection.style.display = 'none';
-    if (joinSection) joinSection.style.display = 'block';
-    
-    // If a name is provided, auto-join the room
-    if (nameParam) {
-      const cleanedName = decodeURIComponent(nameParam).trim().slice(0, 20);
-      joinUsernameInput.value = cleanedName;
-      state.username = cleanedName;
-      const tryJoin = () => {
-        socket.emit('joinRoom', { roomId: roomCode.toLowerCase(), username: cleanedName });
-        showToast('Joining room…', 'info');
-      };
-      if (socket.connected) tryJoin();
-      else socket.once('connect', tryJoin);
-    } else {
-      joinUsernameInput.focus();
-    }
-    
-    // Update page title
+    joinUsernameInput.focus();
     document.title = `Join Room ${roomCode} - Rock Paper Scissors`;
   }
 }
