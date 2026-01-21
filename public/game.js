@@ -639,13 +639,17 @@ const chatSidebar = document.getElementById('chatSidebar');
 const chatMessages = document.getElementById('chatMessages');
 const chatInput = document.getElementById('chatInput');
 const sendChatBtn = document.getElementById('sendChatBtn');
-const toggleChatBtn = document.getElementById('toggleChatBtn');
+const closeChatBtn = document.getElementById('closeChatBtn');
 const chatContainer = document.getElementById('chatContainer');
+const chatToggleFloat = document.getElementById('chatToggleFloat');
+const chatUnreadBadge = document.getElementById('chatUnreadBadge');
 
 // Chat State
+let chatOpen = false;
 let chatHidden = false;
 let messageIdCounter = 0;
 let chatLocked = false;
+let unreadCount = 0;
 
 // Chat Lock DOM Elements
 const lockChatBtn = document.getElementById('lockChatBtn');
@@ -653,10 +657,68 @@ const chatLockIndicator = document.getElementById('chatLockIndicator');
 
 // Show/hide chat sidebar based on room state
 function updateChatVisibility() {
+  const inRoom = state.roomId !== null;
+  
+  if (chatToggleFloat) {
+    chatToggleFloat.style.display = inRoom ? 'flex' : 'none';
+  }
+  
   if (chatSidebar) {
-    // Show chat only when in a room (lobby, game, or results screen)
-    const inRoom = state.roomId !== null;
-    chatSidebar.style.display = inRoom ? 'flex' : 'none';
+    if (!inRoom) {
+      chatSidebar.style.display = 'none';
+      chatSidebar.classList.remove('chat-open');
+      chatOpen = false;
+    }
+  }
+}
+
+// Open/close chat functions
+function openChat() {
+  chatOpen = true;
+  if (chatSidebar) {
+    chatSidebar.style.display = 'flex';
+    setTimeout(() => chatSidebar.classList.add('chat-open'), 10);
+  }
+  if (chatToggleFloat) {
+    chatToggleFloat.classList.add('hidden');
+  }
+  // Clear unread count
+  unreadCount = 0;
+  updateUnreadBadge();
+  // Focus input
+  if (chatInput) {
+    setTimeout(() => chatInput.focus(), 300);
+  }
+}
+
+function closeChat() {
+  chatOpen = false;
+  if (chatSidebar) {
+    chatSidebar.classList.remove('chat-open');
+    // On desktop (wider screens), hide immediately
+    if (window.innerWidth > 1000) {
+      chatSidebar.classList.add('chat-closed');
+    }
+    // On mobile, wait for animation
+    setTimeout(() => {
+      if (!chatOpen && window.innerWidth <= 1000) {
+        chatSidebar.style.display = 'none';
+      }
+    }, 300);
+  }
+  if (chatToggleFloat) {
+    chatToggleFloat.classList.remove('hidden');
+  }
+}
+
+function updateUnreadBadge() {
+  if (chatUnreadBadge) {
+    if (unreadCount > 0 && !chatOpen) {
+      chatUnreadBadge.style.display = 'flex';
+      chatUnreadBadge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+    } else {
+      chatUnreadBadge.style.display = 'none';
+    }
   }
 }
 
@@ -765,15 +827,28 @@ if (chatInput) {
   });
 }
 
-if (toggleChatBtn) {
-  toggleChatBtn.addEventListener('click', () => {
-    chatHidden = !chatHidden;
-    if (chatContainer) {
-      chatContainer.classList.toggle('hidden', chatHidden);
-    }
-    toggleChatBtn.textContent = chatHidden ? 'Show' : 'Hide';
+// Chat toggle button (floating)
+if (chatToggleFloat) {
+  chatToggleFloat.addEventListener('click', () => {
+    openChat();
   });
 }
+
+// Close chat button
+if (closeChatBtn) {
+  closeChatBtn.addEventListener('click', () => {
+    closeChat();
+  });
+}
+
+// Close chat when clicking outside on mobile
+document.addEventListener('click', (e) => {
+  if (window.innerWidth <= 1000 && chatOpen) {
+    if (!chatSidebar.contains(e.target) && !chatToggleFloat.contains(e.target)) {
+      closeChat();
+    }
+  }
+});
 
 // Socket Chat Events
 socket.on('chatMessage', ({ sender, message, senderId, messageId }) => {
@@ -784,6 +859,12 @@ socket.on('chatMessage', ({ sender, message, senderId, messageId }) => {
   // Add to chat sidebar
   if (chatMessages) {
     addChatMessage(chatMessages, escapedSender, escapedMessage, isOwn, false, messageId, senderId);
+  }
+  
+  // Increment unread count if chat is closed and message is not from self
+  if (!chatOpen && !isOwn) {
+    unreadCount++;
+    updateUnreadBadge();
   }
 });
 

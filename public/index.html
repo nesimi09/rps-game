@@ -138,13 +138,19 @@
     <div id="toastContainer" class="toast-container"></div>
   </div>
 
+  <!-- Chat Toggle Button (floating) -->
+  <button id="chatToggleFloat" class="chat-toggle-float" style="display: none;">
+    <span class="chat-toggle-icon">💬</span>
+    <span id="chatUnreadBadge" class="chat-unread-badge" style="display: none;">0</span>
+  </button>
+
   <!-- Global Chat Sidebar -->
   <div id="chatSidebar" class="chat-section" style="display: none;">
     <div class="chat-header">
       <h3>Chat <span id="chatLockIndicator" class="chat-lock-indicator" style="display: none;">Locked</span></h3>
       <div class="chat-header-btns">
         <button id="lockChatBtn" class="btn btn-small btn-warning host-only" style="display: none;">Lock</button>
-        <button id="toggleChatBtn" class="btn btn-small">Hide</button>
+        <button id="closeChatBtn" class="btn btn-small">✕</button>
       </div>
     </div>
     <div id="chatContainer" class="chat-container">

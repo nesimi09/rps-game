@@ -1032,12 +1032,299 @@ body.in-game .container {
   }
   
   .chat-section {
-    position: relative;
-    top: auto;
-    right: auto;
+    position: fixed;
+    top: 0;
+    right: 0;
     width: 100%;
-    max-width: 600px;
-    height: 350px;
-    margin-top: 20px;
+    max-width: 400px;
+    height: 100vh;
+    border-radius: 0;
+    border-left: 2px solid #2d2d44;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+  }
+  
+  .chat-section.chat-open {
+    transform: translateX(0);
+  }
+}
+
+/* Mobile responsive styles */
+@media (max-width: 600px) {
+  body {
+    padding: 10px;
+    align-items: flex-start;
+    padding-top: 20px;
+  }
+  
+  .container {
+    max-width: 100%;
+  }
+  
+  .logo h1 {
+    font-size: 2rem;
+  }
+  
+  .logo h2 {
+    font-size: 1.2rem;
+  }
+  
+  .logo p {
+    font-size: 0.85rem;
+  }
+  
+  /* Home screen */
+  .home-content {
+    padding: 15px;
+  }
+  
+  .input-group label {
+    font-size: 0.9rem;
+  }
+  
+  .input-group input {
+    padding: 10px 12px;
+    font-size: 0.95rem;
+  }
+  
+  .btn {
+    padding: 10px 20px;
+    font-size: 0.9rem;
+  }
+  
+  /* Lobby screen */
+  .lobby-header h2 {
+    font-size: 1.3rem;
+  }
+  
+  .room-info {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  
+  .room-code {
+    font-size: 1.2rem;
+  }
+  
+  .room-info .btn-small {
+    width: 100%;
+    text-align: center;
+  }
+  
+  .change-room-section {
+    margin-top: 10px;
+  }
+  
+  .player-list {
+    max-height: 200px;
+  }
+  
+  .player-item {
+    padding: 10px;
+    font-size: 0.9rem;
+  }
+  
+  /* Game screen */
+  .game-header h2 {
+    font-size: 1.2rem;
+  }
+  
+  .timer-container {
+    padding: 8px 15px;
+  }
+  
+  .timer-display {
+    font-size: 1.5rem;
+  }
+  
+  .choices {
+    flex-direction: row;
+    gap: 8px;
+  }
+  
+  .choice-btn {
+    padding: 15px 10px;
+    min-width: 80px;
+  }
+  
+  .choice-emoji {
+    font-size: 2rem;
+  }
+  
+  .choice-label {
+    font-size: 0.75rem;
+  }
+  
+  .choice-status {
+    font-size: 0.9rem;
+  }
+  
+  /* Results screen */
+  .results-header h2 {
+    font-size: 1.2rem;
+  }
+  
+  .round-result {
+    font-size: 1rem;
+    padding: 10px;
+  }
+  
+  .results-table-container h3 {
+    font-size: 1rem;
+  }
+  
+  .results-table th,
+  .results-table td {
+    padding: 8px 6px;
+    font-size: 0.8rem;
+  }
+  
+  .results-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .results-actions .btn {
+    width: 100%;
+  }
+  
+  /* Chat on mobile */
+  .chat-section {
+    width: 100%;
+    max-width: 100%;
+    height: 100vh;
+    height: 100dvh; /* Dynamic viewport height for mobile browsers */
+    border-radius: 0;
+    border: none;
+    border-left: 2px solid #2d2d44;
+  }
+  
+  .chat-header {
+    padding: 12px;
+  }
+  
+  .chat-messages {
+    padding: 10px;
+  }
+  
+  .chat-message {
+    padding: 8px 12px;
+    max-width: 90%;
+  }
+  
+  .chat-input-container {
+    padding: 10px;
+  }
+  
+  .chat-input-container input {
+    padding: 10px 12px;
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+  
+  /* Cancel game button */
+  .cancel-game-btn {
+    font-size: 0.8rem;
+    padding: 8px 12px;
+  }
+}
+
+/* Floating chat toggle button */
+.chat-toggle-float {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #1a1a2e;
+  border: 2px solid #2d2d44;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  z-index: 99;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.chat-toggle-float:hover {
+  transform: scale(1.1);
+  background: #252540;
+}
+
+.chat-toggle-float:active {
+  transform: scale(0.95);
+}
+
+.chat-toggle-icon {
+  font-size: 1.4rem;
+}
+
+.chat-unread-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: var(--danger);
+  color: white;
+  font-size: 0.75rem;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+/* Hide floating button when chat is open on mobile */
+.chat-toggle-float.hidden {
+  display: none;
+}
+
+/* Desktop: larger screens can have chat always visible */
+@media (min-width: 1001px) {
+  .chat-toggle-float {
+    bottom: 20px;
+    right: 420px; /* Position to left of chat sidebar */
+  }
+  
+  .chat-section.chat-closed {
+    display: none !important;
+  }
+}
+
+/* Very small screens */
+@media (max-width: 380px) {
+  .logo h1 {
+    font-size: 1.6rem;
+  }
+  
+  .logo h2 {
+    font-size: 1rem;
+  }
+  
+  .choice-btn {
+    padding: 12px 8px;
+    min-width: 70px;
+  }
+  
+  .choice-emoji {
+    font-size: 1.6rem;
+  }
+  
+  .btn {
+    padding: 10px 15px;
+    font-size: 0.85rem;
+  }
+  
+  .chat-toggle-float {
+    width: 50px;
+    height: 50px;
+    bottom: 15px;
+    right: 15px;
   }
 }
