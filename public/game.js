@@ -678,14 +678,14 @@ function openChat() {
   if (chatSidebar) {
     chatSidebar.style.display = 'flex';
     chatSidebar.classList.remove('chat-closed');
-    setTimeout(() => chatSidebar.classList.add('chat-open'), 10);
+    chatSidebar.classList.add('chat-open');
   }
   // Clear unread count
   unreadCount = 0;
   updateUnreadBadge();
   // Focus input
   if (chatInput) {
-    setTimeout(() => chatInput.focus(), 300);
+    chatInput.focus();
   }
 }
 
@@ -693,12 +693,7 @@ function closeChat() {
   chatOpen = false;
   if (chatSidebar) {
     chatSidebar.classList.remove('chat-open');
-    // Wait for animation then hide
-    setTimeout(() => {
-      if (!chatOpen) {
-        chatSidebar.style.display = 'none';
-      }
-    }, 300);
+    chatSidebar.style.display = 'none';
   }
 }
 
@@ -826,6 +821,14 @@ if (chatToggleFloat) {
     } else {
       openChat();
     }
+  });
+}
+
+// Close button in chat header
+const closeChatBtn = document.getElementById('closeChatBtn');
+if (closeChatBtn) {
+  closeChatBtn.addEventListener('click', () => {
+    closeChat();
   });
 }
 
