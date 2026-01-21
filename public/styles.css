@@ -36,13 +36,14 @@ body {
   position: relative;
 }
 
-/* Adjust container when chat is visible (in game, not lobby) */
+/* Adjust container when chat is visible */
 body.in-game {
   align-items: flex-start;
   padding-top: 40px;
 }
 
-body.in-game .container {
+/* Only shift container when chat is actually open */
+body.in-game.chat-open .container {
   margin-right: 320px;
 }
 
@@ -1066,7 +1067,8 @@ body.in-game .container {
     padding-top: 20px;
   }
 
-  body.in-game .container {
+  body.in-game .container,
+  body.in-game.chat-open .container {
     margin-right: 0;
     margin-bottom: 20px;
   }

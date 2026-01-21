@@ -23,6 +23,66 @@ const TIMER_DURATION = 7;
 const RESULTS_DURATION = 5;
 const WINS_TO_WIN = 9;
 
+// Bot names pool for when player count becomes odd
+const BOT_NAMES = ['🤖 RoboPlayer', '🤖 BotBuddy', '🤖 AutoPick', '🤖 RandomBot', '🤖 FillBot'];
+
+// Create a bot player for the room
+function createBot(room) {
+  const botId = `bot-${uuidv4().substring(0, 8)}`;
+  const usedNames = Array.from(room.players.values()).map(p => p.username);
+  const availableNames = BOT_NAMES.filter(name => !usedNames.includes(name));
+  const botName = availableNames.length > 0 ? availableNames[0] : `🤖 Bot-${botId.substring(4, 8)}`;
+  
+  return {
+    id: botId,
+    username: botName,
+    isHost: false,
+    isBot: true,
+    choice: null,
+    isReady: false,
+    wins: 0,
+    roundResult: null,
+    opponentChoice: null
+  };
+}
+
+// Remove all bots from a room
+function removeAllBots(room) {
+  const botsToRemove = [];
+  room.players.forEach((player, id) => {
+    if (player.isBot) {
+      botsToRemove.push(id);
+    }
+  });
+  botsToRemove.forEach(id => room.players.delete(id));
+  return botsToRemove.length;
+}
+
+// Add or remove bots to ensure even player count during game
+function adjustBotsForEvenCount(room) {
+  const nonHostPlayers = Array.from(room.players.values()).filter(p => !p.isHost);
+  const humanPlayers = nonHostPlayers.filter(p => !p.isBot);
+  const botPlayers = nonHostPlayers.filter(p => p.isBot);
+  
+  // If we have an odd number of humans, we need exactly 1 bot
+  // If we have an even number of humans, we need 0 bots
+  const needBot = humanPlayers.length % 2 !== 0;
+  
+  if (needBot && botPlayers.length === 0) {
+    // Add a bot
+    const bot = createBot(room);
+    room.players.set(bot.id, bot);
+    return { added: bot, removed: null };
+  } else if (!needBot && botPlayers.length > 0) {
+    // Remove all bots
+    const removed = botPlayers.map(b => b.username);
+    removeAllBots(room);
+    return { added: null, removed };
+  }
+  
+  return { added: null, removed: null };
+}
+
 function getResult(choice1, choice2) {
   if (choice1 === choice2) return 'tie';
   if (
@@ -42,15 +102,59 @@ function shuffleArray(array) {
   return arr;
 }
 
-function createPairings(players) {
+function createPairings(players, room) {
   const shuffled = shuffleArray(players);
   const pairs = [];
   for (let i = 0; i < shuffled.length - 1; i += 2) {
     pairs.push([shuffled[i], shuffled[i + 1]]);
   }
-  // If odd, last player has no opponent
+  // If odd, last player has no opponent (shouldn't happen with bot system)
   const leftover = shuffled.length % 2 === 1 ? shuffled[shuffled.length - 1] : null;
+  
+  // Make bots choose randomly after a short delay
+  pairs.forEach(([p1, p2]) => {
+    if (room) {
+      const player1 = room.players.get(p1.id);
+      const player2 = room.players.get(p2.id);
+      
+      // Bots make a random choice after 1-4 seconds
+      if (player1?.isBot) {
+        setTimeout(() => {
+          if (room.gameState === 'playing' && player1) {
+            player1.choice = CHOICES[Math.floor(Math.random() * CHOICES.length)];
+            player1.isReady = true;
+            checkAllReady(room);
+          }
+        }, 1000 + Math.random() * 3000);
+      }
+      if (player2?.isBot) {
+        setTimeout(() => {
+          if (room.gameState === 'playing' && player2) {
+            player2.choice = CHOICES[Math.floor(Math.random() * CHOICES.length)];
+            player2.isReady = true;
+            checkAllReady(room);
+          }
+        }, 1000 + Math.random() * 3000);
+      }
+    }
+  });
+  
   return { pairs, leftover };
+}
+
+// Check if all paired players are ready and end round if so
+function checkAllReady(room) {
+  if (!room || room.gameState !== 'playing') return;
+  
+  const allReady = room.pairings.every(([p1, p2]) => {
+    const pl1 = room.players.get(p1.id);
+    const pl2 = room.players.get(p2.id);
+    return pl1?.isReady && pl2?.isReady;
+  });
+
+  if (allReady && room.pairings.length > 0) {
+    endRound(room.id);
+  }
 }
 
 function endRound(roomId) {
@@ -109,9 +213,9 @@ function endRound(roomId) {
     if (p) p.roundResult = 'no_opponent';
   }
 
-  // Build leaderboard (non-host players sorted by wins)
+  // Build leaderboard (non-host, non-bot players sorted by wins)
   const leaderboard = Array.from(room.players.values())
-    .filter(p => !p.isHost)
+    .filter(p => !p.isHost && !p.isBot)
     .map(p => ({ id: p.id, username: p.username, wins: p.wins }))
     .sort((a, b) => b.wins - a.wins);
 
@@ -137,7 +241,7 @@ function endRound(roomId) {
     });
   });
 
-  // Check for winners (10+ wins)
+  // Check for winners (9+ wins)
   const winners = leaderboard.filter(p => p.wins >= WINS_TO_WIN);
   
   if (winners.length > 0) {
@@ -164,6 +268,24 @@ function startNextRound(roomId) {
     room.resultsTimer = null;
   }
 
+  // Silently add/remove bots for even player count (invisible to players)
+  adjustBotsForEvenCount(room);
+
+  // Check if we have enough human players to continue
+  const humanPlayers = Array.from(room.players.values()).filter(p => !p.isHost && !p.isBot);
+  if (humanPlayers.length < 1) {
+    // Not enough players, return to lobby
+    room.gameState = 'lobby';
+    room.roundNumber = 0;
+    room.pairings = [];
+    room.leftover = null;
+    removeAllBots(room);
+    io.to(room.id).emit('returnedToLobby');
+    io.to(room.id).emit('playerList', getPlayerList(room));
+    io.to(room.id).emit('chatSystem', { message: 'Not enough players to continue. Returned to lobby.' });
+    return;
+  }
+
   room.gameState = 'playing';
   room.roundNumber++;
 
@@ -176,11 +298,11 @@ function startNextRound(roomId) {
   });
 
   // Create new random pairings (non-host players)
-  const nonHostPlayers = Array.from(room.players.values())
+  const nonHostPlayersData = Array.from(room.players.values())
     .filter(p => !p.isHost)
     .map(p => ({ id: p.id, username: p.username }));
 
-  const { pairs, leftover } = createPairings(nonHostPlayers);
+  const { pairs, leftover } = createPairings(nonHostPlayersData, room);
   room.pairings = pairs;
   room.leftover = leftover;
 
@@ -191,13 +313,15 @@ function startNextRound(roomId) {
     opponentMap[p2.id] = p1.username;
   });
 
-  // Emit to each player with their opponent
+  // Emit to each player with their opponent (skip bots)
   room.players.forEach((player, id) => {
-    io.to(id).emit('gameStarted', {
-      roundNumber: room.roundNumber,
-      timerDuration: TIMER_DURATION,
-      opponent: opponentMap[id] || null
-    });
+    if (!player.isBot) {
+      io.to(id).emit('gameStarted', {
+        roundNumber: room.roundNumber,
+        timerDuration: TIMER_DURATION,
+        opponent: opponentMap[id] || null
+      });
+    }
   });
 
   room.roundTimer = setTimeout(() => {
@@ -375,14 +499,15 @@ io.on('connection', (socket) => {
     }
 
     const nonHostPlayers = Array.from(room.players.values()).filter(p => !p.isHost);
-    if (nonHostPlayers.length < 2) {
-      socket.emit('error', { message: 'Need at least 2 players to start' });
+    if (nonHostPlayers.length < 1) {
+      socket.emit('error', { message: 'Need at least 1 player to start' });
       return;
     }
     
+    // Silently add a bot if we have an odd number of players
     if (nonHostPlayers.length % 2 !== 0) {
-      socket.emit('error', { message: `Need an even number of players to start. Currently ${nonHostPlayers.length} players.` });
-      return;
+      const bot = createBot(room);
+      room.players.set(bot.id, bot);
     }
 
     room.gameState = 'playing';
@@ -395,7 +520,8 @@ io.on('connection', (socket) => {
       player.opponentChoice = null;
     });
 
-    const { pairs, leftover } = createPairings(nonHostPlayers.map(p => ({ id: p.id, username: p.username })));
+    const allNonHostPlayers = Array.from(room.players.values()).filter(p => !p.isHost);
+    const { pairs, leftover } = createPairings(allNonHostPlayers.map(p => ({ id: p.id, username: p.username })), room);
     room.pairings = pairs;
     room.leftover = leftover;
 
@@ -406,11 +532,13 @@ io.on('connection', (socket) => {
     });
 
     room.players.forEach((player, id) => {
-      io.to(id).emit('gameStarted', {
-        roundNumber: room.roundNumber,
-        timerDuration: TIMER_DURATION,
-        opponent: opponentMap[id] || null
-      });
+      if (!player.isBot) {
+        io.to(id).emit('gameStarted', {
+          roundNumber: room.roundNumber,
+          timerDuration: TIMER_DURATION,
+          opponent: opponentMap[id] || null
+        });
+      }
     });
 
     room.roundTimer = setTimeout(() => {
@@ -430,15 +558,7 @@ io.on('connection', (socket) => {
     player.isReady = true;
 
     // Check if all paired players are ready
-    const allReady = room.pairings.every(([p1, p2]) => {
-      const pl1 = room.players.get(p1.id);
-      const pl2 = room.players.get(p2.id);
-      return pl1?.isReady && pl2?.isReady;
-    });
-
-    if (allReady && room.pairings.length > 0) {
-      endRound(room.id);
-    }
+    checkAllReady(room);
   });
 
   socket.on('kickPlayer', (playerId) => {
@@ -501,6 +621,9 @@ io.on('connection', (socket) => {
     room.pairings = [];
     room.leftover = null;
 
+    // Remove all bots when returning to lobby
+    removeAllBots(room);
+
     room.players.forEach(player => {
       player.choice = null;
       player.isReady = false;
@@ -525,6 +648,9 @@ io.on('connection', (socket) => {
     room.roundNumber = 0;
     room.pairings = [];
     room.leftover = null;
+
+    // Remove all bots when cancelling
+    removeAllBots(room);
 
     room.players.forEach(player => {
       player.choice = null;
@@ -649,12 +775,15 @@ io.on('connection', (socket) => {
 });
 
 function getPlayerList(room) {
-  return Array.from(room.players.values()).map(player => ({
-    id: player.id,
-    username: player.username,
-    isHost: player.isHost,
-    wins: player.wins
-  }));
+  // Filter out bots from player list display
+  return Array.from(room.players.values())
+    .filter(p => !p.isBot)
+    .map(player => ({
+      id: player.id,
+      username: player.username,
+      isHost: player.isHost,
+      wins: player.wins
+    }));
 }
 
 const PORT = process.env.PORT || 3000;

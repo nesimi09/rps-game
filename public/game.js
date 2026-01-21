@@ -524,9 +524,9 @@ socket.on('gameOver', ({ winners, leaderboard }) => {
   // Show winner banner
   let winnerText = '';
   if (winners.length === 1) {
-    winnerText = `${winners[0]} WINS with 10 points!`;
+    winnerText = `🏆 ${winners[0]} WINS! 🏆`;
   } else {
-    winnerText = `TIE! ${winners.join(' & ')} reached 10 points!`;
+    winnerText = `TIE! ${winners.join(' & ')} both reached 9 wins!`;
   }
   
   roundResult.innerHTML = winnerText;
@@ -675,6 +675,7 @@ function updateChatVisibility() {
 // Open/close chat functions
 function openChat() {
   chatOpen = true;
+  document.body.classList.add('chat-open');
   if (chatSidebar) {
     chatSidebar.style.display = 'flex';
     chatSidebar.classList.remove('chat-closed');
@@ -691,6 +692,7 @@ function openChat() {
 
 function closeChat() {
   chatOpen = false;
+  document.body.classList.remove('chat-open');
   if (chatSidebar) {
     chatSidebar.classList.remove('chat-open');
     chatSidebar.style.display = 'none';
