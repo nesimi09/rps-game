@@ -1,5 +1,37 @@
-// Connect to Socket.io server
-const socket = io();
+// Connect to Socket.io server with reconnection settings
+const socket = io({
+  reconnection: true,
+  reconnectionAttempts: Infinity,
+  reconnectionDelay: 1000,
+  reconnectionDelayMax: 5000,
+  timeout: 60000
+});
+
+// Handle reconnection
+socket.on('connect', () => {
+  console.log('Connected to server');
+  // If we have room info, try to rejoin
+  if (state.roomCode && state.username) {
+    socket.emit('rejoinRoom', { roomCode: state.roomCode, username: state.username });
+  }
+});
+
+socket.on('disconnect', (reason) => {
+  console.log('Disconnected:', reason);
+  if (reason === 'io server disconnect') {
+    // Server disconnected us, try to reconnect
+    socket.connect();
+  }
+});
+
+socket.on('reconnect', (attemptNumber) => {
+  console.log('Reconnected after', attemptNumber, 'attempts');
+  showToast('Reconnected to server', 'success');
+});
+
+socket.on('reconnect_error', () => {
+  showToast('Connection lost, trying to reconnect...', 'warning');
+});
 
 // State
 let state = {
@@ -302,6 +334,37 @@ socket.on('roomJoined', ({ roomId, roomCode, playerId, isHost, username }) => {
   updateHostUI();
   showScreen('lobby');
   showToast('Joined room!', 'success');
+});
+
+// Handle successful rejoin after reconnection
+socket.on('rejoinSuccess', ({ roomId, roomCode, playerId, isHost, username, gameState, chatLocked }) => {
+  state.roomId = roomId;
+  state.roomCode = roomCode;
+  state.playerId = playerId;
+  state.isHost = isHost;
+  state.username = username;
+
+  roomCodeDisplay.textContent = roomCode;
+  updateHostUI();
+  
+  // Show appropriate screen based on game state
+  if (gameState === 'lobby') {
+    showScreen('lobby');
+  }
+  // If game is in progress, the next round/result event will update the screen
+  
+  showToast('Reconnected!', 'success');
+});
+
+// Handle failed rejoin - reset to home
+socket.on('rejoinFailed', () => {
+  state.roomId = null;
+  state.roomCode = null;
+  state.playerId = null;
+  state.isHost = false;
+  state.username = '';
+  showScreen('home');
+  showToast('Room no longer exists', 'warning');
 });
 
 socket.on('playerList', (players) => {

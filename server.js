@@ -7,7 +7,11 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: "*", methods: ["GET", "POST"] }
+  cors: { origin: "*", methods: ["GET", "POST"] },
+  pingTimeout: 60000,      // 60 seconds before considering connection dead
+  pingInterval: 25000,     // Send ping every 25 seconds
+  upgradeTimeout: 30000,   // 30 seconds to upgrade connection
+  allowEIO3: true          // Allow older clients
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -251,6 +255,72 @@ io.on('connection', (socket) => {
 
     socket.emit('roomCreated', { roomId: internalId, roomCode, playerId: socket.id, isHost: true });
     io.to(internalId).emit('playerList', getPlayerList(room));
+  });
+
+  // Handle reconnection - try to rejoin room with same username
+  socket.on('rejoinRoom', ({ roomCode, username }) => {
+    const room = roomIdToRoom.get(roomCode);
+    if (!room) {
+      // Room no longer exists
+      socket.emit('rejoinFailed');
+      return;
+    }
+
+    // Check if this player was already in the room (by username)
+    let existingPlayer = null;
+    let existingPlayerId = null;
+    room.players.forEach((player, id) => {
+      if (player.username.toLowerCase() === username.toLowerCase()) {
+        existingPlayer = player;
+        existingPlayerId = id;
+      }
+    });
+
+    if (existingPlayer) {
+      // Remove old player entry and add with new socket id
+      const wasHost = existingPlayer.isHost;
+      const wins = existingPlayer.wins;
+      room.players.delete(existingPlayerId);
+      
+      room.players.set(socket.id, {
+        id: socket.id,
+        username,
+        isHost: wasHost,
+        choice: existingPlayer.choice,
+        isReady: existingPlayer.isReady,
+        wins: wins,
+        roundResult: existingPlayer.roundResult,
+        opponentChoice: existingPlayer.opponentChoice
+      });
+
+      if (wasHost) {
+        room.hostId = socket.id;
+      }
+
+      socket.join(room.id);
+      socket.roomId = room.id;
+
+      socket.emit('rejoinSuccess', { 
+        roomId: room.id, 
+        roomCode, 
+        playerId: socket.id, 
+        isHost: wasHost, 
+        username,
+        gameState: room.gameState,
+        chatLocked: room.chatLocked
+      });
+      
+      // Send current state
+      io.to(room.id).emit('playerList', getPlayerList(room));
+      
+      // Send chat history
+      if (room.chatHistory && room.chatHistory.length > 0) {
+        socket.emit('chatHistory', room.chatHistory);
+      }
+    } else {
+      // Player not found in room, rejoin failed
+      socket.emit('rejoinFailed');
+    }
   });
 
   socket.on('joinRoom', ({ roomCode, username }) => {
