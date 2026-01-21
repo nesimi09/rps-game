@@ -825,7 +825,6 @@ if (chatToggleFloat) {
 }
 
 // Close button in chat header
-const closeChatBtn = document.getElementById('closeChatBtn');
 if (closeChatBtn) {
   closeChatBtn.addEventListener('click', () => {
     closeChat();
