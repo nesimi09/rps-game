@@ -15,7 +15,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const rooms = new Map();
 const roomIdToRoom = new Map(); // Maps room codes to room objects for quick lookup
 const CHOICES = ['rock', 'paper', 'scissors'];
-const TIMER_DURATION = 5;
+const TIMER_DURATION = 7;
 const RESULTS_DURATION = 5;
 const WINS_TO_WIN = 10;
 
@@ -228,7 +228,9 @@ io.on('connection', (socket) => {
       roundTimer: null,
       resultsTimer: null,
       pairings: [],
-      leftover: null
+      leftover: null,
+      chatLocked: false,
+      chatHistory: []
     };
 
     room.players.set(socket.id, {
@@ -282,9 +284,16 @@ io.on('connection', (socket) => {
     socket.join(room.id);
     socket.roomId = room.id;
 
-    socket.emit('roomJoined', { roomId: room.id, roomCode, playerId: socket.id, isHost: false, username });
+    socket.emit('roomJoined', { roomId: room.id, roomCode, playerId: socket.id, isHost: false, username, chatLocked: room.chatLocked });
+    
+    // Send chat history to the new player
+    if (room.chatHistory && room.chatHistory.length > 0) {
+      socket.emit('chatHistory', room.chatHistory);
+    }
+    
     io.to(room.id).emit('playerList', getPlayerList(room));
     io.to(room.id).emit('playerJoined', { username });
+    io.to(room.id).emit('chatSystem', { message: `${username} joined the room` });
   });
 
   socket.on('startGame', () => {
@@ -434,6 +443,102 @@ io.on('connection', (socket) => {
     io.to(room.id).emit('playerList', getPlayerList(room));
   });
 
+  // Cancel game handler - returns to lobby and resets all progress
+  socket.on('cancelGame', () => {
+    const room = rooms.get(socket.roomId);
+    if (!room || room.hostId !== socket.id) return;
+
+    if (room.roundTimer) clearTimeout(room.roundTimer);
+    if (room.resultsTimer) clearTimeout(room.resultsTimer);
+
+    room.gameState = 'lobby';
+    room.roundNumber = 0;
+    room.pairings = [];
+    room.leftover = null;
+
+    room.players.forEach(player => {
+      player.choice = null;
+      player.isReady = false;
+      player.wins = 0;
+      player.roundResult = null;
+      player.opponentChoice = null;
+    });
+
+    io.to(room.id).emit('gameCancelled');
+    io.to(room.id).emit('chatSystem', { message: 'Game was cancelled by the host' });
+    io.to(room.id).emit('playerList', getPlayerList(room));
+  });
+
+  // Chat message handler
+  socket.on('chatMessage', ({ message }) => {
+    const room = rooms.get(socket.roomId);
+    if (!room) return;
+    
+    const player = room.players.get(socket.id);
+    if (!player) return;
+    
+    // Check if chat is locked (host can still send)
+    if (room.chatLocked && room.hostId !== socket.id) return;
+    
+    // Rate limiting - 1 message per second
+    const now = Date.now();
+    if (player.lastMessageTime && now - player.lastMessageTime < 1000) {
+      socket.emit('error', { message: 'Slow down! Wait a moment before sending another message.' });
+      return;
+    }
+    player.lastMessageTime = now;
+    
+    // Validate message
+    if (!message || typeof message !== 'string') return;
+    const trimmedMessage = message.trim();
+    if (trimmedMessage.length === 0 || trimmedMessage.length > 200) return;
+    
+    // Generate unique message ID
+    const messageId = `${socket.id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    const chatMsg = {
+      sender: player.username,
+      message: trimmedMessage,
+      senderId: socket.id,
+      messageId: messageId
+    };
+    
+    // Store in chat history (limit to last 100 messages)
+    if (!room.chatHistory) room.chatHistory = [];
+    room.chatHistory.push(chatMsg);
+    if (room.chatHistory.length > 100) {
+      room.chatHistory.shift();
+    }
+    
+    // Broadcast the message to all players in the room
+    io.to(room.id).emit('chatMessage', chatMsg);
+  });
+
+  // Delete message handler (host only)
+  socket.on('deleteMessage', ({ messageId }) => {
+    const room = rooms.get(socket.roomId);
+    if (!room) return;
+    
+    // Only host can delete messages
+    if (room.hostId !== socket.id) return;
+    
+    // Broadcast deletion to all players in the room
+    io.to(room.id).emit('messageDeleted', { messageId });
+  });
+
+  // Toggle chat lock (host only)
+  socket.on('toggleChatLock', () => {
+    const room = rooms.get(socket.roomId);
+    if (!room) return;
+    
+    // Only host can lock/unlock chat
+    if (room.hostId !== socket.id) return;
+    
+    room.chatLocked = !room.chatLocked;
+    io.to(room.id).emit('chatLocked', { locked: room.chatLocked });
+    io.to(room.id).emit('chatSystem', { message: room.chatLocked ? 'Chat has been locked by the host' : 'Chat has been unlocked by the host' });
+  });
+
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
     const room = rooms.get(socket.roomId);
@@ -469,6 +574,7 @@ io.on('connection', (socket) => {
 
     io.to(room.id).emit('playerList', getPlayerList(room));
     io.to(room.id).emit('playerLeft', { username });
+    io.to(room.id).emit('chatSystem', { message: `${username} left the room` });
   });
 });
 

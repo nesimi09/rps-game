@@ -13,7 +13,8 @@ let state = {
   timeLeft: 5,
   resultsTimer: null,
   opponent: null,
-  changeRoomClickState: 0 // 0 = not clicked, 1 = ready to change
+  changeRoomClickState: 0, // 0 = not clicked, 1 = ready to change
+  cancelGameClickState: 0 // 0 = not clicked, 1 = ready to cancel
 };
 
 // DOM Elements
@@ -58,7 +59,10 @@ const roundResult = document.getElementById('roundResult');
 const resultsBody = document.getElementById('resultsBody');
 const backToLobbyBtn = document.getElementById('backToLobbyBtn');
 const nextRoundCountdown = document.getElementById('nextRoundCountdown');
-const waitingNextRound = document.getElementById('waitingNextRound');
+
+// Cancel Game Buttons
+const cancelGameBtn = document.getElementById('cancelGameBtn');
+const cancelGameResultsBtn = document.getElementById('cancelGameResultsBtn');
 
 // Toast Container
 const toastContainer = document.getElementById('toastContainer');
@@ -83,7 +87,6 @@ function updateHostUI() {
     el.style.display = state.isHost ? 'inline-block' : 'none';
   });
   waitingMessage.style.display = state.isHost ? 'none' : 'block';
-  waitingNextRound.style.display = state.isHost ? 'none' : 'block';
   
   // Show/hide room code section based on host status
   if (roomCodeSection) {
@@ -209,6 +212,49 @@ if (changeRoomCodeBtn) {
   });
 }
 
+// Cancel Game button handlers (both game screen and results screen)
+function handleCancelGameClick(btn) {
+  if (state.cancelGameClickState === 0) {
+    // First click - show confirmation state
+    state.cancelGameClickState = 1;
+    btn.textContent = 'Click again to confirm';
+    btn.classList.add('ready-to-cancel');
+    showToast('Click again to cancel the game', 'warning');
+    
+    // Reset after 3 seconds if not clicked again
+    setTimeout(() => {
+      if (state.cancelGameClickState === 1) {
+        state.cancelGameClickState = 0;
+        resetCancelButtons();
+      }
+    }, 3000);
+  } else {
+    // Second click - actually cancel the game
+    state.cancelGameClickState = 0;
+    resetCancelButtons();
+    socket.emit('cancelGame');
+  }
+}
+
+function resetCancelButtons() {
+  if (cancelGameBtn) {
+    cancelGameBtn.textContent = 'Cancel Game';
+    cancelGameBtn.classList.remove('ready-to-cancel');
+  }
+  if (cancelGameResultsBtn) {
+    cancelGameResultsBtn.textContent = 'Cancel Game';
+    cancelGameResultsBtn.classList.remove('ready-to-cancel');
+  }
+}
+
+if (cancelGameBtn) {
+  cancelGameBtn.addEventListener('click', () => handleCancelGameClick(cancelGameBtn));
+}
+
+if (cancelGameResultsBtn) {
+  cancelGameResultsBtn.addEventListener('click', () => handleCancelGameClick(cancelGameResultsBtn));
+}
+
 choiceBtns.forEach(btn => {
   btn.addEventListener('click', () => {
     if (state.isHost) {
@@ -317,22 +363,23 @@ socket.on('gameStarted', ({ roundNumber: round, timerDuration, opponent }) => {
   state.currentChoice = null;
   state.opponent = opponent;
   roundNumber.textContent = round;
+  updateGameLayout(true);
   
   if (state.isHost) {
-    opponentInfo.innerHTML = '👁️ <strong>You are observing</strong>';
+    opponentInfo.innerHTML = '<strong>You are observing</strong>';
     choiceBtns.forEach(btn => {
       btn.classList.remove('selected', 'disabled');
       btn.classList.add('host-disabled');
     });
     choiceStatus.textContent = '';
   } else if (opponent) {
-    opponentInfo.innerHTML = `⚔️ You are playing against: <strong>${opponent}</strong>`;
+    opponentInfo.innerHTML = `You are playing against: <strong>${opponent}</strong>`;
     choiceBtns.forEach(btn => {
       btn.classList.remove('selected', 'disabled', 'host-disabled');
     });
     choiceStatus.textContent = '';
   } else {
-    opponentInfo.innerHTML = '👀 No opponent this round (odd number of players)';
+    opponentInfo.innerHTML = 'No opponent this round (odd number of players)';
     choiceBtns.forEach(btn => {
       btn.classList.add('disabled');
     });
@@ -351,18 +398,18 @@ socket.on('gameResults', ({ leaderboard, roundNumber: round, yourResult, opponen
   
   // Show personal result for this round
   if (state.isHost) {
-    roundResult.innerHTML = '👁️ You observed this round';
+    roundResult.innerHTML = 'You observed this round';
   } else if (yourResult === 'win') {
-    roundResult.innerHTML = `🎉 You <strong>WON</strong> against ${opponentName}! (${getChoiceEmoji(yourChoice)} vs ${getChoiceEmoji(opponentChoice)})`;
+    roundResult.innerHTML = `You <strong>WON</strong> against ${opponentName}! (${getChoiceEmoji(yourChoice)} vs ${getChoiceEmoji(opponentChoice)})`;
     roundResult.className = 'round-result win';
   } else if (yourResult === 'lose') {
-    roundResult.innerHTML = `😢 You <strong>LOST</strong> to ${opponentName} (${getChoiceEmoji(yourChoice)} vs ${getChoiceEmoji(opponentChoice)})`;
+    roundResult.innerHTML = `You <strong>LOST</strong> to ${opponentName} (${getChoiceEmoji(yourChoice)} vs ${getChoiceEmoji(opponentChoice)})`;
     roundResult.className = 'round-result lose';
   } else if (yourResult === 'tie') {
-    roundResult.innerHTML = `🤝 <strong>TIE</strong> with ${opponentName}! (${getChoiceEmoji(yourChoice)} vs ${getChoiceEmoji(opponentChoice)})`;
+    roundResult.innerHTML = `<strong>TIE</strong> with ${opponentName}! (${getChoiceEmoji(yourChoice)} vs ${getChoiceEmoji(opponentChoice)})`;
     roundResult.className = 'round-result tie';
   } else if (yourResult === 'no_opponent') {
-    roundResult.innerHTML = '👀 You had no opponent this round';
+    roundResult.innerHTML = 'You had no opponent this round';
     roundResult.className = 'round-result';
   } else {
     roundResult.innerHTML = '';
@@ -376,9 +423,6 @@ socket.on('gameResults', ({ leaderboard, roundNumber: round, yourResult, opponen
     if (player.id === state.playerId) tr.classList.add('highlight');
     
     let rankDisplay = index + 1;
-    if (index === 0) rankDisplay = '🥇';
-    else if (index === 1) rankDisplay = '🥈';
-    else if (index === 2) rankDisplay = '🥉';
 
     tr.innerHTML = `
       <td>${rankDisplay}</td>
@@ -417,9 +461,9 @@ socket.on('gameOver', ({ winners, leaderboard }) => {
   // Show winner banner
   let winnerText = '';
   if (winners.length === 1) {
-    winnerText = `🎉 ${winners[0]} WINS with 10 points! 🎉`;
+    winnerText = `${winners[0]} WINS with 10 points!`;
   } else {
-    winnerText = `🎉 TIE! ${winners.join(' & ')} reached 10 points! 🎉`;
+    winnerText = `TIE! ${winners.join(' & ')} reached 10 points!`;
   }
   
   roundResult.innerHTML = winnerText;
@@ -433,9 +477,6 @@ socket.on('gameOver', ({ winners, leaderboard }) => {
     if (winners.some(w => w === player.username)) tr.classList.add('winner');
     
     let rankDisplay = index + 1;
-    if (index === 0) rankDisplay = '🥇';
-    else if (index === 1) rankDisplay = '🥈';
-    else if (index === 2) rankDisplay = '🥉';
 
     tr.innerHTML = `
       <td>${rankDisplay}</td>
@@ -446,7 +487,6 @@ socket.on('gameOver', ({ winners, leaderboard }) => {
   });
 
   nextRoundCountdown.textContent = 'Game Over!';
-  waitingNextRound.style.display = 'none';
   if (state.isHost) backToLobbyBtn.style.display = 'inline-block';
   
   showScreen('results');
@@ -456,6 +496,9 @@ socket.on('returnedToLobby', () => {
   state.currentChoice = null;
   state.opponent = null;
   state.changeRoomClickState = 0;
+  state.cancelGameClickState = 0;
+  resetCancelButtons();
+  updateGameLayout(false);
   if (changeRoomCodeBtn) {
     changeRoomCodeBtn.textContent = 'Change Room Code & Link';
     changeRoomCodeBtn.classList.remove('ready-to-change');
@@ -467,6 +510,26 @@ socket.on('returnedToLobby', () => {
   }
   showScreen('lobby');
   showToast('Returned to lobby', 'success');
+});
+
+socket.on('gameCancelled', () => {
+  state.currentChoice = null;
+  state.opponent = null;
+  state.changeRoomClickState = 0;
+  state.cancelGameClickState = 0;
+  resetCancelButtons();
+  updateGameLayout(false);
+  if (changeRoomCodeBtn) {
+    changeRoomCodeBtn.textContent = 'Change Room Code & Link';
+    changeRoomCodeBtn.classList.remove('ready-to-change');
+  }
+  stopTimer();
+  if (state.resultsTimer) {
+    clearInterval(state.resultsTimer);
+    state.resultsTimer = null;
+  }
+  showScreen('lobby');
+  showToast('Game was cancelled by the host', 'warning');
 });
 
 socket.on('roomCodeChanged', ({ newRoomCode }) => {
@@ -504,6 +567,268 @@ socket.on('connect', () => {
   if (state.roomId && screens.lobby.classList.contains('active')) {
     showToast('Reconnected!', 'success');
   }
+});
+
+// ==================== CHAT FUNCTIONALITY ====================
+
+// Chat DOM Elements - Global Sidebar
+const chatSidebar = document.getElementById('chatSidebar');
+const chatMessages = document.getElementById('chatMessages');
+const chatInput = document.getElementById('chatInput');
+const sendChatBtn = document.getElementById('sendChatBtn');
+const toggleChatBtn = document.getElementById('toggleChatBtn');
+const chatContainer = document.getElementById('chatContainer');
+
+// Chat State
+let chatHidden = false;
+let messageIdCounter = 0;
+let chatLocked = false;
+
+// Chat Lock DOM Elements
+const lockChatBtn = document.getElementById('lockChatBtn');
+const chatLockIndicator = document.getElementById('chatLockIndicator');
+
+// Show/hide chat sidebar based on room state
+function updateChatVisibility() {
+  if (chatSidebar) {
+    // Show chat only when in a room (lobby, game, or results screen)
+    const inRoom = state.roomId !== null;
+    chatSidebar.style.display = inRoom ? 'flex' : 'none';
+  }
+}
+
+// Update layout for game/results screens (shift content for chat sidebar)
+function updateGameLayout(isInGame) {
+  if (isInGame) {
+    document.body.classList.add('in-game');
+  } else {
+    document.body.classList.remove('in-game');
+  }
+}
+
+// Chat Helper Functions
+function addChatMessage(container, sender, text, isOwn = false, isSystem = false, messageId = null, senderId = null) {
+  const messageDiv = document.createElement('div');
+  messageDiv.className = 'chat-message';
+  
+  // Use provided messageId or generate a local one
+  const msgId = messageId || `local-${++messageIdCounter}`;
+  messageDiv.dataset.messageId = msgId;
+  if (senderId) messageDiv.dataset.senderId = senderId;
+  
+  if (isSystem) {
+    messageDiv.classList.add('system');
+    messageDiv.innerHTML = `<span class="chat-message-text">${text}</span>`;
+  } else {
+    if (isOwn) messageDiv.classList.add('own');
+    
+    // Add delete and kick buttons for host (only on non-own messages)
+    const deleteBtn = state.isHost && !isOwn && !isSystem ? `<button class="chat-delete-btn" data-msg-id="${msgId}" title="Delete message">×</button>` : '';
+    const kickBtn = state.isHost && !isOwn && !isSystem && senderId ? `<button class="chat-kick-btn" data-sender-id="${senderId}" title="Kick player">Kick</button>` : '';
+    
+    messageDiv.innerHTML = `
+      ${deleteBtn}
+      ${kickBtn}
+      <div class="chat-message-sender">${sender}</div>
+      <div class="chat-message-text">${text}</div>
+    `;
+    
+    // Attach delete event listener
+    if (state.isHost && !isOwn && !isSystem) {
+      const delBtn = messageDiv.querySelector('.chat-delete-btn');
+      if (delBtn) {
+        delBtn.addEventListener('click', () => {
+          socket.emit('deleteMessage', { messageId: msgId });
+        });
+      }
+      
+      // Attach kick event listener (double click confirmation)
+      const kickButton = messageDiv.querySelector('.chat-kick-btn');
+      if (kickButton && senderId) {
+        let kickConfirm = false;
+        kickButton.addEventListener('click', () => {
+          if (!kickConfirm) {
+            kickConfirm = true;
+            kickButton.textContent = 'Sure?';
+            kickButton.classList.add('confirm');
+            setTimeout(() => {
+              kickConfirm = false;
+              kickButton.textContent = 'Kick';
+              kickButton.classList.remove('confirm');
+            }, 3000);
+          } else {
+            socket.emit('kickPlayer', senderId);
+            kickConfirm = false;
+          }
+        });
+      }
+    }
+  }
+  
+  container.appendChild(messageDiv);
+  container.scrollTop = container.scrollHeight;
+}
+
+function syncChatMessages() {
+  // No longer needed with single chat sidebar
+}
+
+function sendChatMessage(inputElement) {
+  const message = inputElement.value.trim();
+  if (!message) return;
+  if (!state.roomId) return;
+  
+  socket.emit('chatMessage', { message });
+  inputElement.value = '';
+}
+
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Chat Event Listeners - Lobby
+if (sendChatBtn) {
+  sendChatBtn.addEventListener('click', () => sendChatMessage(chatInput));
+}
+
+if (chatInput) {
+  chatInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      sendChatMessage(chatInput);
+    }
+  });
+}
+
+if (toggleChatBtn) {
+  toggleChatBtn.addEventListener('click', () => {
+    chatHidden = !chatHidden;
+    if (chatContainer) {
+      chatContainer.classList.toggle('hidden', chatHidden);
+    }
+    toggleChatBtn.textContent = chatHidden ? 'Show' : 'Hide';
+  });
+}
+
+// Socket Chat Events
+socket.on('chatMessage', ({ sender, message, senderId, messageId }) => {
+  const isOwn = senderId === state.playerId;
+  const escapedMessage = escapeHtml(message);
+  const escapedSender = escapeHtml(sender);
+  
+  // Add to chat sidebar
+  if (chatMessages) {
+    addChatMessage(chatMessages, escapedSender, escapedMessage, isOwn, false, messageId, senderId);
+  }
+});
+
+// Chat history for new players joining
+socket.on('chatHistory', (history) => {
+  if (!chatMessages) return;
+  
+  history.forEach(({ sender, message, senderId, messageId }) => {
+    const isOwn = senderId === state.playerId;
+    const escapedMessage = escapeHtml(message);
+    const escapedSender = escapeHtml(sender);
+    addChatMessage(chatMessages, escapedSender, escapedMessage, isOwn, false, messageId, senderId);
+  });
+});
+
+socket.on('messageDeleted', ({ messageId }) => {
+  // Remove message from both chat containers
+  document.querySelectorAll(`[data-message-id="${messageId}"]`).forEach(el => {
+    el.remove();
+  });
+});
+
+socket.on('chatLocked', ({ locked }) => {
+  chatLocked = locked;
+  updateChatLockUI();
+});
+
+function updateChatLockUI() {
+  // Update lock indicator
+  if (chatLockIndicator) {
+    chatLockIndicator.style.display = chatLocked ? 'inline' : 'none';
+  }
+  
+  // Update lock button text
+  const btnText = chatLocked ? 'Unlock' : 'Lock';
+  if (lockChatBtn) lockChatBtn.textContent = btnText;
+  
+  // Disable/enable inputs for non-hosts
+  const isDisabled = chatLocked && !state.isHost;
+  
+  if (chatInput) {
+    chatInput.disabled = isDisabled;
+    chatInput.placeholder = isDisabled ? 'Chat is locked by host' : 'Type a message...';
+  }
+  if (sendChatBtn) sendChatBtn.disabled = isDisabled;
+}
+
+// Lock chat button event listener
+if (lockChatBtn) {
+  lockChatBtn.addEventListener('click', () => {
+    socket.emit('toggleChatLock');
+  });
+}
+
+socket.on('chatSystem', ({ message }) => {
+  const escapedMessage = escapeHtml(message);
+  
+  // Add to chat sidebar
+  if (chatMessages) {
+    addChatMessage(chatMessages, '', escapedMessage, false, true);
+  }
+});
+
+// Clear chat when joining a new room
+const originalRoomCreated = socket.listeners('roomCreated')[0];
+socket.off('roomCreated');
+socket.on('roomCreated', (data) => {
+  // Clear chat messages and reset lock state
+  if (chatMessages) chatMessages.innerHTML = '';
+  chatLocked = false;
+  updateChatLockUI();
+  updateGameLayout(false);
+  
+  // Call original handler
+  state.roomId = data.roomId;
+  state.roomCode = data.roomCode;
+  state.playerId = data.playerId;
+  state.isHost = data.isHost;
+
+  roomCodeDisplay.textContent = data.roomCode;
+  updateHostUI();
+  updateChatVisibility();
+  showScreen('lobby');
+  window.history.pushState({}, '', `?room=${data.roomCode}`);
+  showToast('Room created!', 'success');
+});
+
+const originalRoomJoined = socket.listeners('roomJoined')[0];
+socket.off('roomJoined');
+socket.on('roomJoined', (data) => {
+  // Clear chat messages and set lock state from server
+  if (chatMessages) chatMessages.innerHTML = '';
+  chatLocked = data.chatLocked || false;
+  updateChatLockUI();
+  updateGameLayout(false);
+  
+  // Call original handler logic
+  state.roomId = data.roomId;
+  state.roomCode = data.roomCode;
+  state.playerId = data.playerId;
+  state.isHost = data.isHost;
+  state.username = data.username;
+
+  roomCodeDisplay.textContent = data.roomCode;
+  updateHostUI();
+  updateChatVisibility();
+  showScreen('lobby');
+  showToast('Joined room!', 'success');
 });
 
 // Initialize

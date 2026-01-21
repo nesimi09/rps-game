@@ -12,7 +12,6 @@
     <!-- Home Screen (Create Room) -->
     <div id="homeScreen" class="screen active">
       <div class="logo">
-        <h1>✊ ✋ ✌️</h1>
         <h2>Rock Paper Scissors Event</h2>
         <p class="game-mode">First to 10 wins!</p>
       </div>
@@ -29,7 +28,6 @@
     <!-- Join Screen (shown when ?room= in URL) -->
     <div id="joinScreen" class="screen">
       <div class="logo">
-        <h1>✊ ✋ ✌️</h1>
         <h2>Rock Paper Scissors Event</h2>
         <p>You've been invited!</p>
         <p class="game-mode">First to 10 wins!</p>
@@ -82,6 +80,8 @@
         </div>
       </div>
 
+      <button id="cancelGameBtn" class="btn btn-danger cancel-game-btn host-only" style="display: none;">Cancel Game</button>
+
       <div class="choice-section">
         <h3>Make Your Choice!</h3>
         <div class="choices">
@@ -127,7 +127,7 @@
 
       <div class="results-actions">
         <button id="backToLobbyBtn" class="btn btn-secondary host-only" style="display: none;">Back to Lobby</button>
-        <p id="waitingNextRound" class="waiting-message">Next round starting soon...</p>
+        <button id="cancelGameResultsBtn" class="btn btn-danger cancel-game-btn host-only" style="display: none;">Cancel Game</button>
       </div>
     </div>
 
@@ -136,6 +136,24 @@
 
     <!-- Toast Notifications -->
     <div id="toastContainer" class="toast-container"></div>
+  </div>
+
+  <!-- Global Chat Sidebar -->
+  <div id="chatSidebar" class="chat-section" style="display: none;">
+    <div class="chat-header">
+      <h3>Chat <span id="chatLockIndicator" class="chat-lock-indicator" style="display: none;">Locked</span></h3>
+      <div class="chat-header-btns">
+        <button id="lockChatBtn" class="btn btn-small btn-warning host-only" style="display: none;">Lock</button>
+        <button id="toggleChatBtn" class="btn btn-small">Hide</button>
+      </div>
+    </div>
+    <div id="chatContainer" class="chat-container">
+      <div id="chatMessages" class="chat-messages"></div>
+      <div class="chat-input-container">
+        <input type="text" id="chatInput" placeholder="Type a message..." maxlength="200">
+        <button id="sendChatBtn" class="btn btn-primary btn-small">Send</button>
+      </div>
+    </div>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
