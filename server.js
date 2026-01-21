@@ -21,7 +21,7 @@ const roomIdToRoom = new Map(); // Maps room codes to room objects for quick loo
 const CHOICES = ['rock', 'paper', 'scissors'];
 const TIMER_DURATION = 7;
 const RESULTS_DURATION = 5;
-const WINS_TO_WIN = 10;
+const WINS_TO_WIN = 9;
 
 function getResult(choice1, choice2) {
   if (choice1 === choice2) return 'tie';
