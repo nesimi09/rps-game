@@ -677,10 +677,8 @@ function openChat() {
   chatOpen = true;
   if (chatSidebar) {
     chatSidebar.style.display = 'flex';
+    chatSidebar.classList.remove('chat-closed');
     setTimeout(() => chatSidebar.classList.add('chat-open'), 10);
-  }
-  if (chatToggleFloat) {
-    chatToggleFloat.classList.add('hidden');
   }
   // Clear unread count
   unreadCount = 0;
@@ -695,19 +693,12 @@ function closeChat() {
   chatOpen = false;
   if (chatSidebar) {
     chatSidebar.classList.remove('chat-open');
-    // On desktop (wider screens), hide immediately
-    if (window.innerWidth > 1000) {
-      chatSidebar.classList.add('chat-closed');
-    }
-    // On mobile, wait for animation
+    // Wait for animation then hide
     setTimeout(() => {
-      if (!chatOpen && window.innerWidth <= 1000) {
+      if (!chatOpen) {
         chatSidebar.style.display = 'none';
       }
     }, 300);
-  }
-  if (chatToggleFloat) {
-    chatToggleFloat.classList.remove('hidden');
   }
 }
 
@@ -827,17 +818,14 @@ if (chatInput) {
   });
 }
 
-// Chat toggle button (floating)
+// Chat toggle button (floating) - toggles open/close
 if (chatToggleFloat) {
   chatToggleFloat.addEventListener('click', () => {
-    openChat();
-  });
-}
-
-// Close chat button
-if (closeChatBtn) {
-  closeChatBtn.addEventListener('click', () => {
-    closeChat();
+    if (chatOpen) {
+      closeChat();
+    } else {
+      openChat();
+    }
   });
 }
 
