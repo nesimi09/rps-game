@@ -683,9 +683,9 @@ io.on('connection', (socket) => {
     // Check if chat is locked (host can still send)
     if (room.chatLocked && room.hostId !== socket.id) return;
     
-    // Rate limiting - 1 message per second
+    // Rate limiting - 1 message per second (host bypasses this)
     const now = Date.now();
-    if (player.lastMessageTime && now - player.lastMessageTime < 1000) {
+    if (room.hostId !== socket.id && player.lastMessageTime && now - player.lastMessageTime < 1000) {
       socket.emit('error', { message: 'Slow down! Wait a moment before sending another message.' });
       return;
     }
