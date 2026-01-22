@@ -453,6 +453,25 @@ body.in-game.chat-open .container {
   margin-bottom: 30px;
 }
 
+.game-header-top {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+  position: relative;
+}
+
+.game-header-top h2 {
+  margin: 0;
+}
+
+.game-header-top .cancel-game-btn {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
 .timer-container {
   display: flex;
   align-items: center;

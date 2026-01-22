@@ -92,15 +92,16 @@
     <!-- Game Screen -->
     <div id="gameScreen" class="screen">
       <div class="game-header">
-        <h2>Round <span id="roundNumber">1</span></h2>
+        <div class="game-header-top">
+          <h2>Round <span id="roundNumber">1</span></h2>
+          <button id="cancelGameBtn" class="btn btn-danger btn-small cancel-game-btn host-only" style="display: none;">Cancel Game</button>
+        </div>
         <div id="opponentInfo" class="opponent-info"></div>
         <div class="timer-container">
           <span class="timer-label">Time Left:</span>
           <span id="timerDisplay" class="timer-display">5</span>
         </div>
       </div>
-
-      <button id="cancelGameBtn" class="btn btn-danger cancel-game-btn host-only" style="display: none;">Cancel Game</button>
 
       <div class="choice-section">
         <h3>Make Your Choice!</h3>

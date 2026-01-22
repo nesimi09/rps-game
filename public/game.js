@@ -2,6 +2,10 @@
 const clickSound = new Audio('clicksound.mp3');
 clickSound.volume = 0.5;
 
+// Kahoot gong sound for results
+const kahootGong = new Audio('kahoot-gong.mp3');
+kahootGong.volume = 0.6;
+
 // Background music - track list with display names
 const musicTrackList = [
   { id: 'lobby', name: 'Lobby', file: 'lobby.mp3' },
@@ -20,20 +24,57 @@ let currentTrackIndex = 0;
 let currentTrack = null;
 let isMuted = false;
 let musicLocked = false; // Lock music controls during game
+let musicPausedTime = 0; // Track where music was paused for resume
+let musicPausedForResults = false; // Flag to track if music was paused for results
 
 // Music control functions
-function playMusic(trackId) {
+function playMusic(trackId, resumeFromPausedTime = false) {
   // Stop all tracks first
   Object.values(musicTracks).forEach(track => {
     track.pause();
-    track.currentTime = 0;
+    if (!resumeFromPausedTime) {
+      track.currentTime = 0;
+    }
   });
   
   if (trackId && musicTracks[trackId] && !isMuted) {
     currentTrack = trackId;
+    // Resume from paused time if requested and same track
+    if (resumeFromPausedTime && musicPausedTime > 0) {
+      musicTracks[trackId].currentTime = musicPausedTime;
+      musicPausedTime = 0;
+    }
     musicTracks[trackId].play().catch(() => {});
   }
+  musicPausedForResults = false;
   updateTrackDisplay();
+}
+
+// Pause music and save current time for later resume
+function pauseMusicForResults() {
+  if (currentTrack && musicTracks[currentTrack]) {
+    musicPausedTime = musicTracks[currentTrack].currentTime;
+    musicTracks[currentTrack].pause();
+    musicPausedForResults = true;
+  }
+}
+
+// Resume music from where it was paused
+function resumeMusicFromPause() {
+  if (musicPausedForResults && currentTrack && musicTracks[currentTrack] && !isMuted) {
+    musicTracks[currentTrack].currentTime = musicPausedTime;
+    musicTracks[currentTrack].play().catch(() => {});
+    musicPausedTime = 0;
+    musicPausedForResults = false;
+  }
+}
+
+// Play the kahoot gong sound
+function playKahootGong() {
+  if (!isMuted) {
+    kahootGong.currentTime = 0;
+    kahootGong.play().catch(() => {});
+  }
 }
 
 function updateTrackDisplay() {
@@ -89,8 +130,11 @@ function playGameMusic() {
   if (currentTrackIndex === 0) {
     currentTrackIndex = 1;
     playMusic(musicTrackList[currentTrackIndex].id);
+  } else if (musicPausedForResults) {
+    // Resume from where we paused for results
+    resumeMusicFromPause();
   }
-  // If already playing game music, don't restart - let it continue
+  // If already playing game music and not paused, don't restart - let it continue
 }
 
 function stopAllMusic() {
@@ -106,9 +150,11 @@ function toggleMute() {
   const muteBtn = document.getElementById('muteBtn');
   if (isMuted) {
     Object.values(musicTracks).forEach(track => track.pause());
+    kahootGong.pause();
     muteBtn.textContent = '🔇';
   } else {
-    if (currentTrack && musicTracks[currentTrack]) {
+    // Only resume music if not paused for results
+    if (currentTrack && musicTracks[currentTrack] && !musicPausedForResults) {
       musicTracks[currentTrack].play().catch(() => {});
     }
     muteBtn.textContent = '🔊';
@@ -325,9 +371,11 @@ function showScreen(screenName) {
   if (screenName === 'lobby') {
     playLobbyMusic();
   } else if (screenName === 'game') {
-    playGameMusic(); // This will lock controls and start game music if needed
+    playGameMusic(); // This will lock controls and start/resume game music
   } else if (screenName === 'results') {
-    // Keep playing current music, don't restart
+    // Pause music and play kahoot gong for results
+    pauseMusicForResults();
+    playKahootGong();
     musicLocked = true;
     updateMusicControlsState();
   } else if (screenName === 'home' || screenName === 'join') {
@@ -591,7 +639,7 @@ socket.on('roomJoined', ({ roomId, roomCode, playerId, isHost, username }) => {
 });
 
 // Handle successful rejoin after reconnection
-socket.on('rejoinSuccess', ({ roomId, roomCode, playerId, isHost, username, gameState, chatLocked }) => {
+socket.on('rejoinSuccess', ({ roomId, roomCode, playerId, isHost, username, gameState, chatLocked, roundNumber: rejoinRoundNumber, timerRemaining, opponent, yourChoice, leaderboard }) => {
   state.roomId = roomId;
   state.roomCode = roomCode;
   state.playerId = playerId;
@@ -601,12 +649,59 @@ socket.on('rejoinSuccess', ({ roomId, roomCode, playerId, isHost, username, game
   roomCodeDisplay.textContent = roomCode;
   updateHostUI();
   updateUserDisplay(); // Show username in top left
+  updateChatVisibility();
+  
+  // Update chat lock state
+  if (typeof chatLocked !== 'undefined') {
+    window.chatLocked = chatLocked;
+    updateChatLockUI();
+  }
   
   // Show appropriate screen based on game state
   if (gameState === 'lobby') {
     showScreen('lobby');
+  } else if (gameState === 'playing') {
+    // Restore game state
+    state.currentChoice = yourChoice || null;
+    state.opponent = opponent;
+    if (roundNumber) roundNumber.textContent = rejoinRoundNumber || 1;
+    
+    // Update opponent info
+    if (isHost) {
+      opponentInfo.innerHTML = '<strong>You are observing</strong>';
+      choiceBtns.forEach(btn => btn.classList.add('host-disabled'));
+      choiceStatus.textContent = '';
+    } else if (opponent) {
+      opponentInfo.innerHTML = `You are playing against: <strong>${opponent}</strong>`;
+      // Restore selection if player already chose
+      if (yourChoice) {
+        choiceBtns.forEach(btn => {
+          btn.classList.remove('selected');
+          if (btn.dataset.choice === yourChoice) {
+            btn.classList.add('selected');
+          }
+        });
+        choiceStatus.textContent = `You chose ${yourChoice}!`;
+      } else {
+        choiceStatus.textContent = '';
+      }
+    } else {
+      opponentInfo.innerHTML = 'No opponent this round (odd number of players)';
+      choiceBtns.forEach(btn => btn.classList.add('disabled'));
+      choiceStatus.textContent = 'Waiting for next round...';
+    }
+    
+    updateGameLayout(true);
+    showScreen('game');
+    
+    // Start timer with remaining time
+    if (timerRemaining && timerRemaining > 0) {
+      startTimer(timerRemaining);
+    }
+  } else if (gameState === 'results') {
+    // Will receive gameResults event with full data
+    updateGameLayout(true);
   }
-  // If game is in progress, the next round/result event will update the screen
   
   showToast('Reconnected!', 'success');
 });
