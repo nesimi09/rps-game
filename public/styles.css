@@ -137,6 +137,17 @@ body.in-game.chat-open .container {
   margin-top: 10px;
 }
 
+.logo .game-rules {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 8px;
+  font-style: italic;
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.4;
+}
+
 /* Buttons */
 .btn {
   display: inline-block;
