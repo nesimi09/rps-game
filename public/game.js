@@ -1,3 +1,7 @@
+
+// Detect if user is on a mobile device
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
 // Click sound
 const clickSound = new Audio('clicksound.mp3');
 clickSound.volume = 0.5;
@@ -154,7 +158,7 @@ function toggleMute() {
     muteBtn.textContent = '🔇';
   } else {
     // Only resume music if not paused for results
-    if (currentTrack && musicTracks[currentTrack] && !musicPausedForResults) {
+    if (currentTrack && musicTracks[currentTrack] && !musicPausedForResults && !isMobile) {
       musicTracks[currentTrack].play().catch(() => {});
     }
     muteBtn.textContent = '🔊';
@@ -272,11 +276,11 @@ socket.on('disconnect', (reason) => {
 
 socket.on('reconnect', (attemptNumber) => {
   console.log('Reconnected after', attemptNumber, 'attempts');
-  showToast('Reconnected to server', 'success');
+  // Notifications disabled
 });
 
 socket.on('reconnect_error', () => {
-  showToast('Connection lost, trying to reconnect...', 'warning');
+  // Notifications disabled
 });
 
 // State
@@ -388,11 +392,7 @@ function showScreen(screenName) {
 }
 
 function showToast(message, type = 'info') {
-  const toast = document.createElement('div');
-  toast.className = `toast ${type}`;
-  toast.textContent = message;
-  toastContainer.appendChild(toast);
-  setTimeout(() => toast.remove(), 3000);
+  // Notifications are disabled as per user request
 }
 
 function updateHostUI() {
@@ -466,7 +466,7 @@ function checkUrlForRoomCode() {
 createRoomBtn.addEventListener('click', () => {
   const username = hostUsernameInput.value.trim();
   if (!username) {
-    showToast('Please enter your name', 'error');
+    // Notifications disabled
     return;
   }
   state.username = username;
@@ -476,11 +476,11 @@ createRoomBtn.addEventListener('click', () => {
 joinRoomBtn.addEventListener('click', () => {
   const username = joinUsernameInput.value.trim();
   if (!username) {
-    showToast('Please enter your name', 'error');
+    // Notifications disabled
     return;
   }
   if (!state.roomCode) {
-    showToast('No room to join', 'error');
+    // Notifications disabled
     return;
   }
   state.username = username;
@@ -490,13 +490,13 @@ joinRoomBtn.addEventListener('click', () => {
 copyLinkBtn.addEventListener('click', () => {
   const link = `${window.location.origin}?room=${state.roomCode}`;
   navigator.clipboard.writeText(link).then(() => {
-    showToast('Link copied!', 'success');
+    // Notifications disabled
   });
 });
 
 copyCodeBtn.addEventListener('click', () => {
   navigator.clipboard.writeText(state.roomCode).then(() => {
-    showToast('Room code copied!', 'success');
+    // Notifications disabled
   });
 });
 
@@ -532,7 +532,7 @@ if (changeRoomCodeBtn) {
       state.changeRoomClickState = 1;
       changeRoomCodeBtn.textContent = 'Click again to change';
       changeRoomCodeBtn.classList.add('ready-to-change');
-      showToast('Click again to change room code. Old links will stop working!', 'warning');
+      // Notifications disabled
     } else {
       // Second click - actually change the room code
       state.changeRoomClickState = 0;
@@ -550,7 +550,7 @@ function handleCancelGameClick(btn) {
     state.cancelGameClickState = 1;
     btn.textContent = 'Click again to confirm';
     btn.classList.add('ready-to-cancel');
-    showToast('Click again to cancel the game', 'warning');
+    // Notifications disabled
     
     // Reset after 3 seconds if not clicked again
     setTimeout(() => {
@@ -589,7 +589,7 @@ if (cancelGameResultsBtn) {
 choiceBtns.forEach(btn => {
   btn.addEventListener('click', () => {
     if (state.isHost) {
-      showToast('You are the host - observer only!', 'warning');
+      // Notifications disabled
       return;
     }
     if (state.timeLeft <= 0) return;
@@ -621,7 +621,7 @@ socket.on('roomCreated', ({ roomId, roomCode, playerId, isHost }) => {
   updateUserDisplay(); // Show username in top left
   showScreen('lobby');
   window.history.pushState({}, '', `?room=${roomCode}`);
-  showToast('Room created!', 'success');
+  // Notifications disabled
 });
 
 socket.on('roomJoined', ({ roomId, roomCode, playerId, isHost, username }) => {
@@ -635,7 +635,7 @@ socket.on('roomJoined', ({ roomId, roomCode, playerId, isHost, username }) => {
   updateHostUI();
   updateUserDisplay(); // Show username in top left
   showScreen('lobby');
-  showToast('Joined room!', 'success');
+  // Notifications disabled
 });
 
 // Handle successful rejoin after reconnection
@@ -703,7 +703,7 @@ socket.on('rejoinSuccess', ({ roomId, roomCode, playerId, isHost, username, game
     updateGameLayout(true);
   }
   
-  showToast('Reconnected!', 'success');
+  // Notifications disabled
 });
 
 // Handle failed rejoin - reset to home
@@ -715,7 +715,7 @@ socket.on('rejoinFailed', () => {
   state.username = '';
   updateUserDisplay(); // Hide username display
   showScreen('home');
-  showToast('Room no longer exists', 'warning');
+  // Notifications disabled
 });
 
 socket.on('playerList', (players) => {
@@ -749,19 +749,19 @@ socket.on('playerList', (players) => {
 });
 
 socket.on('playerJoined', ({ username }) => {
-  showToast(`${username} joined`, 'success');
+  // Notifications disabled
 });
 
 socket.on('playerLeft', ({ username }) => {
-  showToast(`${username} left`, 'warning');
+  // Notifications disabled
 });
 
 socket.on('playerKicked', ({ username }) => {
-  showToast(`${username} was kicked`, 'warning');
+  // Notifications disabled
 });
 
 socket.on('kicked', () => {
-  showToast('You were kicked from the room', 'error');
+  // Notifications disabled
   setTimeout(() => {
     window.location.href = window.location.origin;
   }, 1500);
@@ -770,7 +770,7 @@ socket.on('kicked', () => {
 socket.on('becameHost', () => {
   state.isHost = true;
   updateHostUI();
-  showToast('You are now the host!', 'success');
+  // Notifications disabled
 });
 
 socket.on('gameStarted', ({ roundNumber: round, timerDuration, opponent }) => {
@@ -802,7 +802,7 @@ socket.on('gameStarted', ({ roundNumber: round, timerDuration, opponent }) => {
   }
 
   showScreen('game');
-  showToast(`Round ${round}!`, 'success');
+  // Notifications disabled
   startTimer(timerDuration);
 });
 
@@ -924,7 +924,7 @@ socket.on('returnedToLobby', () => {
     state.resultsTimer = null;
   }
   showScreen('lobby');
-  showToast('Returned to lobby', 'success');
+  // Notifications disabled
 });
 
 socket.on('gameCancelled', () => {
@@ -944,7 +944,7 @@ socket.on('gameCancelled', () => {
     state.resultsTimer = null;
   }
   showScreen('lobby');
-  showToast('Game was cancelled by the host', 'warning');
+  // Notifications disabled
 });
 
 socket.on('roomCodeChanged', ({ newRoomCode }) => {
@@ -956,7 +956,7 @@ socket.on('roomCodeChanged', ({ newRoomCode }) => {
   }
   roomCodeDisplay.textContent = newRoomCode;
   window.history.pushState({}, '', `?room=${newRoomCode}`);
-  showToast('Room code changed! Old links will no longer work.', 'success');
+  // Notifications disabled
 });
 
 socket.on('newRoomGenerated', ({ newRoomId }) => {
@@ -964,24 +964,22 @@ socket.on('newRoomGenerated', ({ newRoomId }) => {
 });
 
 socket.on('hostLeft', () => {
-  showToast('Host left - room closed', 'error');
+  // Notifications disabled
   setTimeout(() => {
     window.location.href = window.location.origin;
   }, 2000);
 });
 
 socket.on('error', ({ message }) => {
-  showToast(message, 'error');
+  // Notifications disabled
 });
 
 socket.on('disconnect', () => {
-  showToast('Disconnected from server', 'error');
+  // Notifications disabled
 });
 
 socket.on('connect', () => {
-  if (state.roomId && screens.lobby.classList.contains('active')) {
-    showToast('Reconnected!', 'success');
-  }
+  // Notifications disabled
 });
 
 // ==================== CHAT FUNCTIONALITY ====================
