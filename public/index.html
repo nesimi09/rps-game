@@ -8,6 +8,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
+  <!-- User Display - Top Left Corner -->
+  <div id="userDisplay" class="user-display" style="display: none;">
+    <span class="user-display-label">Playing as:</span>
+    <span id="userDisplayName" class="user-display-name"></span>
+  </div>
+
   <div class="container">
     <!-- Home Screen (Create Room) -->
     <div id="homeScreen" class="screen active">
@@ -18,8 +24,8 @@
       
       <div class="home-actions">
         <div class="input-group">
-          <label for="hostUsername">Your Name</label>
-          <input type="text" id="hostUsername" placeholder="Enter your name" maxlength="20">
+          <label for="hostUsername">Your Discord Username</label>
+          <input type="text" id="hostUsername" placeholder="Enter your Discord username" maxlength="32">
         </div>
         <button id="createRoomBtn" class="btn btn-primary">Create Room</button>
       </div>
@@ -35,8 +41,8 @@
       
       <div class="home-actions">
         <div class="input-group">
-          <label for="joinUsername">Enter Your Name to Join</label>
-          <input type="text" id="joinUsername" placeholder="Your name" maxlength="20">
+          <label for="joinUsername">Enter Your Discord Username</label>
+          <input type="text" id="joinUsername" placeholder="Your Discord username (for prize identification)" maxlength="32">
         </div>
         <button id="joinRoomBtn" class="btn btn-primary">Join Game</button>
       </div>

@@ -151,7 +151,7 @@ function playKeySound(key, type) {
   const path = getKeySoundPath(key, type);
   if (path) {
     const sound = new Audio(path);
-    sound.volume = type === 'press' ? 0.7 : 0.5;
+    sound.volume = type === 'press' ? 1.0 : 0.8;
     sound.play().catch(() => {});
   }
 }
@@ -299,10 +299,27 @@ const cancelGameResultsBtn = document.getElementById('cancelGameResultsBtn');
 // Toast Container
 const toastContainer = document.getElementById('toastContainer');
 
+// User Display Elements
+const userDisplay = document.getElementById('userDisplay');
+const userDisplayName = document.getElementById('userDisplayName');
+
+// Update user display in top left corner
+function updateUserDisplay() {
+  if (state.username && state.roomId) {
+    userDisplayName.textContent = state.username;
+    userDisplay.style.display = 'flex';
+  } else {
+    userDisplay.style.display = 'none';
+  }
+}
+
 // Helper Functions
 function showScreen(screenName) {
   Object.values(screens).forEach(screen => screen.classList.remove('active'));
   screens[screenName].classList.add('active');
+  
+  // Update user display visibility
+  updateUserDisplay();
   
   // Handle background music based on screen
   if (screenName === 'lobby') {
@@ -317,6 +334,8 @@ function showScreen(screenName) {
     musicLocked = false;
     updateMusicControlsState();
     stopAllMusic();
+    // Hide user display on home/join screens
+    userDisplay.style.display = 'none';
   }
 }
 
@@ -547,9 +566,11 @@ socket.on('roomCreated', ({ roomId, roomCode, playerId, isHost }) => {
   state.roomCode = roomCode;
   state.playerId = playerId;
   state.isHost = isHost;
+  state.username = hostUsernameInput.value.trim(); // Store the username
 
   roomCodeDisplay.textContent = roomCode;
   updateHostUI();
+  updateUserDisplay(); // Show username in top left
   showScreen('lobby');
   window.history.pushState({}, '', `?room=${roomCode}`);
   showToast('Room created!', 'success');
@@ -564,6 +585,7 @@ socket.on('roomJoined', ({ roomId, roomCode, playerId, isHost, username }) => {
 
   roomCodeDisplay.textContent = roomCode;
   updateHostUI();
+  updateUserDisplay(); // Show username in top left
   showScreen('lobby');
   showToast('Joined room!', 'success');
 });
@@ -578,6 +600,7 @@ socket.on('rejoinSuccess', ({ roomId, roomCode, playerId, isHost, username, game
 
   roomCodeDisplay.textContent = roomCode;
   updateHostUI();
+  updateUserDisplay(); // Show username in top left
   
   // Show appropriate screen based on game state
   if (gameState === 'lobby') {
@@ -595,6 +618,7 @@ socket.on('rejoinFailed', () => {
   state.playerId = null;
   state.isHost = false;
   state.username = '';
+  updateUserDisplay(); // Hide username display
   showScreen('home');
   showToast('Room no longer exists', 'warning');
 });

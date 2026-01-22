@@ -19,6 +19,33 @@
   --border: #cbd5e1;
 }
 
+/* User Display - Top Left Corner */
+.user-display {
+  position: fixed;
+  top: 15px;
+  left: 15px;
+  background: var(--primary);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  z-index: 9999;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-display-label {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.8rem;
+}
+
+.user-display-name {
+  font-weight: 600;
+  color: #22c55e;
+}
+
 body {
   font-family: 'Poppins', sans-serif;
   background: var(--bg);
