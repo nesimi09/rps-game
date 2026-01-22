@@ -358,8 +358,42 @@ body.in-game.chat-open .container {
   font-style: italic;
 }
 
+/* Lobby Footer with Music Controls */
+.lobby-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.music-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.music-nav {
+  padding: 6px 10px;
+  font-size: 1rem;
+  min-width: auto;
+}
+
+.track-name {
+  padding: 6px 12px;
+  background: var(--bg-light);
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text);
+  min-width: 70px;
+  text-align: center;
+}
+
 #leaveRoomBtn {
-  width: 100%;
+  flex-shrink: 0;
 }
 
 /* Game Screen */

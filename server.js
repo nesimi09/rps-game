@@ -567,6 +567,13 @@ io.on('connection', (socket) => {
 
     const kickedPlayer = room.players.get(playerId);
     if (kickedPlayer) {
+      // Remove kicked player's messages from chat history
+      if (room.chatHistory) {
+        room.chatHistory = room.chatHistory.filter(msg => msg.senderId !== playerId);
+        // Notify all players to refresh chat (send updated history)
+        io.to(room.id).emit('chatHistory', room.chatHistory);
+      }
+      
       room.players.delete(playerId);
       io.to(playerId).emit('kicked');
       io.sockets.sockets.get(playerId)?.leave(room.id);

@@ -1,3 +1,203 @@
+// Click sound
+const clickSound = new Audio('clicksound.mp3');
+clickSound.volume = 0.5;
+
+// Background music - track list with display names
+const musicTrackList = [
+  { id: 'lobby', name: 'Lobby', file: 'lobby.mp3' },
+  { id: 'whileplaying', name: 'Game 1', file: 'whileplaying.mp3' },
+  { id: 'whileplaying2', name: 'Game 2', file: 'whileplaying2.mp3' }
+];
+
+const musicTracks = {};
+musicTrackList.forEach(track => {
+  musicTracks[track.id] = new Audio(track.file);
+  musicTracks[track.id].loop = true;
+  musicTracks[track.id].volume = 0.3;
+});
+
+let currentTrackIndex = 0;
+let currentTrack = null;
+let isMuted = false;
+let musicLocked = false; // Lock music controls during game
+
+// Music control functions
+function playMusic(trackId) {
+  // Stop all tracks first
+  Object.values(musicTracks).forEach(track => {
+    track.pause();
+    track.currentTime = 0;
+  });
+  
+  if (trackId && musicTracks[trackId] && !isMuted) {
+    currentTrack = trackId;
+    musicTracks[trackId].play().catch(() => {});
+  }
+  updateTrackDisplay();
+}
+
+function updateTrackDisplay() {
+  const trackNameEl = document.getElementById('trackName');
+  if (trackNameEl) {
+    trackNameEl.textContent = musicTrackList[currentTrackIndex].name;
+  }
+}
+
+function updateMusicControlsState() {
+  const prevBtn = document.getElementById('prevTrackBtn');
+  const nextBtn = document.getElementById('nextTrackBtn');
+  const trackNameEl = document.getElementById('trackName');
+  
+  if (prevBtn && nextBtn) {
+    prevBtn.disabled = musicLocked;
+    nextBtn.disabled = musicLocked;
+    prevBtn.style.opacity = musicLocked ? '0.5' : '1';
+    nextBtn.style.opacity = musicLocked ? '0.5' : '1';
+  }
+  if (trackNameEl) {
+    trackNameEl.style.opacity = musicLocked ? '0.7' : '1';
+  }
+}
+
+function nextTrack() {
+  if (musicLocked) return; // Can't change during game
+  currentTrackIndex = (currentTrackIndex + 1) % musicTrackList.length;
+  playMusic(musicTrackList[currentTrackIndex].id);
+}
+
+function prevTrack() {
+  if (musicLocked) return; // Can't change during game
+  currentTrackIndex = (currentTrackIndex - 1 + musicTrackList.length) % musicTrackList.length;
+  playMusic(musicTrackList[currentTrackIndex].id);
+}
+
+function playLobbyMusic() {
+  // Unlock music controls in lobby
+  musicLocked = false;
+  updateMusicControlsState();
+  
+  currentTrackIndex = 0; // Lobby is first track
+  playMusic(musicTrackList[currentTrackIndex].id);
+}
+
+function playGameMusic() {
+  // Lock music controls during game
+  musicLocked = true;
+  updateMusicControlsState();
+  
+  // If on lobby track, switch to game music
+  if (currentTrackIndex === 0) {
+    currentTrackIndex = 1;
+    playMusic(musicTrackList[currentTrackIndex].id);
+  }
+  // If already playing game music, don't restart - let it continue
+}
+
+function stopAllMusic() {
+  Object.values(musicTracks).forEach(track => {
+    track.pause();
+    track.currentTime = 0;
+  });
+  currentTrack = null;
+}
+
+function toggleMute() {
+  isMuted = !isMuted;
+  const muteBtn = document.getElementById('muteBtn');
+  if (isMuted) {
+    Object.values(musicTracks).forEach(track => track.pause());
+    muteBtn.textContent = '🔇';
+  } else {
+    if (currentTrack && musicTracks[currentTrack]) {
+      musicTracks[currentTrack].play().catch(() => {});
+    }
+    muteBtn.textContent = '🔊';
+  }
+}
+
+// Keyboard click sounds - store paths instead of Audio objects
+const keyboardSoundPaths = {
+  press: {
+    BACKSPACE: 'keyboardclicksounds/press/BACKSPACE.mp3',
+    ENTER: 'keyboardclicksounds/press/ENTER.mp3',
+    SPACE: 'keyboardclicksounds/press/SPACE.mp3',
+    GENERIC: 'keyboardclicksounds/press/GENERIC_R4.mp3'
+  },
+  release: {
+    BACKSPACE: 'keyboardclicksounds/release/BACKSPACE.mp3',
+    ENTER: 'keyboardclicksounds/release/ENTER.mp3',
+    SPACE: 'keyboardclicksounds/release/SPACE.mp3',
+    GENERIC: 'keyboardclicksounds/release/GENERIC.mp3'
+  }
+};
+
+// Map keys to sound files
+function getKeySoundPath(key, type) {
+  const upperKey = key.toUpperCase();
+  const paths = keyboardSoundPaths[type];
+  
+  if (upperKey === 'BACKSPACE' || upperKey === 'DELETE') {
+    return paths.BACKSPACE;
+  } else if (upperKey === 'ENTER') {
+    return paths.ENTER;
+  } else if (upperKey === ' ' || upperKey === 'SPACE') {
+    return paths.SPACE;
+  } else {
+    return paths.GENERIC;
+  }
+}
+
+function playKeySound(key, type) {
+  const path = getKeySoundPath(key, type);
+  if (path) {
+    const sound = new Audio(path);
+    sound.volume = type === 'press' ? 0.7 : 0.5;
+    sound.play().catch(() => {});
+  }
+}
+
+// Add keyboard sound listeners for input fields
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+    playKeySound(e.key, 'press');
+  }
+});
+
+document.addEventListener('keyup', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+    playKeySound(e.key, 'release');
+  }
+});
+
+// Play click sound on any button or clickable element
+function playClickSound() {
+  // Create a new audio instance each time to allow overlapping sounds
+  const sound = new Audio('clicksound.mp3');
+  sound.volume = 0.5;
+  sound.play().catch(() => {}); // Ignore errors if sound can't play
+}
+
+// Check if element or its parent is clickable
+function isClickable(element) {
+  if (!element) return false;
+  // Check the element and its parents
+  let el = element;
+  while (el && el !== document.body) {
+    if (el.matches('button, .btn, .choice-btn, input[type="button"], input[type="submit"], .clickable, li, a, [onclick], [data-choice]')) {
+      return true;
+    }
+    el = el.parentElement;
+  }
+  return false;
+}
+
+// Add click sound to all buttons and clickable elements
+document.addEventListener('mousedown', (e) => {
+  if (isClickable(e.target)) {
+    playClickSound();
+  }
+}, true);
+
 // Connect to Socket.io server with reconnection settings
 const socket = io({
   reconnection: true,
@@ -103,6 +303,21 @@ const toastContainer = document.getElementById('toastContainer');
 function showScreen(screenName) {
   Object.values(screens).forEach(screen => screen.classList.remove('active'));
   screens[screenName].classList.add('active');
+  
+  // Handle background music based on screen
+  if (screenName === 'lobby') {
+    playLobbyMusic();
+  } else if (screenName === 'game') {
+    playGameMusic(); // This will lock controls and start game music if needed
+  } else if (screenName === 'results') {
+    // Keep playing current music, don't restart
+    musicLocked = true;
+    updateMusicControlsState();
+  } else if (screenName === 'home' || screenName === 'join') {
+    musicLocked = false;
+    updateMusicControlsState();
+    stopAllMusic();
+  }
 }
 
 function showToast(message, type = 'info') {
@@ -224,6 +439,23 @@ startGameBtn.addEventListener('click', () => {
 
 leaveRoomBtn.addEventListener('click', () => {
   window.location.href = window.location.origin;
+});
+
+// Music controls
+const prevTrackBtn = document.getElementById('prevTrackBtn');
+const nextTrackBtn = document.getElementById('nextTrackBtn');
+const muteBtn = document.getElementById('muteBtn');
+
+prevTrackBtn.addEventListener('click', () => {
+  prevTrack();
+});
+
+nextTrackBtn.addEventListener('click', () => {
+  nextTrack();
+});
+
+muteBtn.addEventListener('click', () => {
+  toggleMute();
 });
 
 if (changeRoomCodeBtn) {
@@ -428,18 +660,19 @@ socket.on('gameStarted', ({ roundNumber: round, timerDuration, opponent }) => {
   roundNumber.textContent = round;
   updateGameLayout(true);
   
+  // Clear all selections from previous round
+  choiceBtns.forEach(btn => {
+    btn.classList.remove('selected', 'disabled', 'host-disabled');
+  });
+  
   if (state.isHost) {
     opponentInfo.innerHTML = '<strong>You are observing</strong>';
     choiceBtns.forEach(btn => {
-      btn.classList.remove('selected', 'disabled');
       btn.classList.add('host-disabled');
     });
     choiceStatus.textContent = '';
   } else if (opponent) {
     opponentInfo.innerHTML = `You are playing against: <strong>${opponent}</strong>`;
-    choiceBtns.forEach(btn => {
-      btn.classList.remove('selected', 'disabled', 'host-disabled');
-    });
     choiceStatus.textContent = '';
   } else {
     opponentInfo.innerHTML = 'No opponent this round (odd number of players)';
@@ -860,9 +1093,12 @@ socket.on('chatMessage', ({ sender, message, senderId, messageId }) => {
   }
 });
 
-// Chat history for new players joining
+// Chat history for new players joining or when history is updated (e.g., player kicked)
 socket.on('chatHistory', (history) => {
   if (!chatMessages) return;
+  
+  // Clear existing messages first
+  chatMessages.innerHTML = '';
   
   history.forEach(({ sender, message, senderId, messageId }) => {
     const isOwn = senderId === state.playerId;
